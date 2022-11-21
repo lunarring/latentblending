@@ -115,7 +115,7 @@ class LatentBlending():
             self.mask_image = None
             self.mode = 'inpaint'
         else:
-            self.mode = 'default'
+            self.mode = 'standard'
             
         
     def init_inpainting(
@@ -214,14 +214,16 @@ class LatentBlending():
             
         if list_injection_idx is None:
             assert list_injection_strength is not None, "Supply either list_injection_idx or list_injection_strength"
+            # Create the injection indexes
             list_injection_idx = [int(round(x*self.num_inference_steps)) for x in list_injection_strength]
             assert min(np.diff(list_injection_idx)) > 0, 'Injection idx needs to be increasing'
             if min(np.diff(list_injection_idx)) < 2:
                 print("Warning: your injection spacing is very tight. consider increasing the distances")
-            assert type(list_injection_strength[0]) is float, "Need to supply floats for list_injection_strength"
+            assert type(list_injection_strength[1]) is float, "Need to supply floats for list_injection_strength"
+            # we are checking element 1 in list_injection_strength because "0" is an int... [0, 0.5]
         
+        assert max(list_injection_idx) < self.num_inference_steps, "Decrease the injection index or strength"
         assert len(list_injection_idx) == len(list_nmb_branches), "Need to have same length"
-        
         assert max(list_injection_idx) < self.num_inference_steps,"Injection index cannot happen after last diffusion step! Decrease list_injection_idx or list_injection_strength[-1]"
         
         if fixed_seeds is not None:
@@ -364,7 +366,7 @@ class LatentBlending():
             return_image: Optional[bool] = False
         ):
         r"""
-        Wrapper function for run_diffusion_default and run_diffusion_inpaint.
+        Wrapper function for run_diffusion_standard and run_diffusion_inpaint.
         Depending on the mode, the correct one will be executed.
         
         Args:
@@ -381,8 +383,8 @@ class LatentBlending():
         """
         
         
-        if self.mode == 'default':
-            return self.run_diffusion_default(text_embeddings, latents_for_injection=latents_for_injection, idx_start=idx_start, idx_stop=idx_stop, return_image=return_image)
+        if self.mode == 'standard':
+            return self.run_diffusion_standard(text_embeddings, latents_for_injection=latents_for_injection, idx_start=idx_start, idx_stop=idx_stop, return_image=return_image)
         
         elif self.mode == 'inpaint':
             assert self.image_source is not None, "image_source is None. Please run init_inpainting first."
@@ -391,7 +393,7 @@ class LatentBlending():
 
 
     @torch.no_grad()
-    def run_diffusion_default(
+    def run_diffusion_standard(
             self, 
             text_embeddings: torch.FloatTensor, 
             latents_for_injection: torch.FloatTensor = None, 
@@ -936,7 +938,7 @@ if __name__ == "__main__":
     height = 512
     guidance_scale = 5
     seed = 421
-    mode = 'default'
+    mode = 'standard'
     fps_target = 24
     duration_target = 10
     gpu_id = 0
@@ -962,7 +964,7 @@ if __name__ == "__main__":
     pipe = pipe.to(device)
     
 
-    #%% DEFAULT TRANS RE SANITY
+    #%% standard TRANS RE SANITY
     
     lb = LatentBlending(pipe, device, height, width, num_inference_steps, guidance_scale, seed)
     self = lb
@@ -1472,7 +1474,7 @@ if __name__ == "__main__":
     height = 512
     guidance_scale = 5
     seed = 421
-    mode = 'default'
+    mode = 'standard'
     fps_target = 30
     duration_target = 15
     gpu_id = 0
@@ -1490,17 +1492,56 @@ if __name__ == "__main__":
     )
     pipe = pipe.to(device)
     
+    #%% seed cherrypicking
+    
+    prompt1 = "photo of a surreal brutalistic vault that is glowing in the night, futuristic, greek ornaments, spider webs"
+    lb.set_prompt1(prompt1)
+    
+    for i in range(1):
+        seed = 753528763 #np.random.randint(753528763)
+        lb.set_seed(seed)
+        txt = f"{i} {seed}"
+        img = lb.run_diffusion(lb.text_embedding1, return_image=True)
+        plt.imshow(img)
+        plt.title(txt)
+        plt.show()
+        print(txt)
+        
     
     
+    #%% make nice images of latents
+    num_inference_steps = 10 # Number of diffusion interations
+    list_nmb_branches = [2, 3, 7, 12] # Specify the branching structure 
+    list_injection_idx = [0, 2, 5, 8] # Specify the branching structure
+    width = 512 
+    height = 512
+    guidance_scale = 5
+    fixed_seeds = [993621550, 326814432]
+        
+    lb = LatentBlending(pipe, device, height, width, num_inference_steps, guidance_scale)
+    prompt1 = "photo of a beautiful forest covered in white flowers, ambient light, very detailed, magic"
+    prompt2 = "photo of a mystical sculpture in the middle of the desert, warm sunlight, sand, eery feeling"
+    lb.set_prompt1(prompt1)
+    lb.set_prompt2(prompt2)
     
-    
-    
-    
+    imgs_transition = lb.run_transition(list_nmb_branches, list_injection_idx=list_injection_idx, fixed_seeds=fixed_seeds)
+#%%
+    dp_tmp= "/home/lugo/tmp/latentblending"
+    for d in range(len(lb.tree_latents)):
+        for b in range(list_nmb_branches[d]):
+            for x in range(len(lb.tree_latents[d][b])):
+                lati = lb.tree_latents[d][b][x]
+                img = lb.latent2image(lati)
+                fn = f"d{d}_b{b}_x{x}.jpg"
+                ip.save(os.path.join(dp_tmp, fn), img)
+                
+            
+        
+
     
     #%%
     """
     TODO Coding:
-        list_nmb_branches > num inference
         auto mode (quality settings)
         refactor movie man
         make movie combiner in movie man
