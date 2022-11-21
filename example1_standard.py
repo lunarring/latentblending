@@ -70,8 +70,6 @@ prompt2 = "photo of an eerie statue surrounded by ferns and vines, analog photog
 lb.set_prompt1(prompt1)
 lb.set_prompt2(prompt2)
 
-
-
 imgs_transition = lb.run_transition(list_nmb_branches, list_injection_strength, fixed_seeds=fixed_seeds)
 
 # let's get more cheap frames via linear interpolation

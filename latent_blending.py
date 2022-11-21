@@ -267,6 +267,7 @@ class LatentBlending():
             self.tree_fracts = []
             self.tree_status = []
             self.tree_final_imgs = [None]*list_nmb_branches[-1]
+            self.tree_final_imgs_timing = [0]*list_nmb_branches[-1]
             
             nmb_blocks_time = len(list_injection_idx_ext)-1
             for t_block in range(nmb_blocks_time):
@@ -321,6 +322,7 @@ class LatentBlending():
             list_compute.extend(list_local_stem[::-1])        
             
         # Diffusion computations start here
+        time_start = time.time()
         for t_block, idx_branch in tqdm(list_compute, desc="computing transition"):
             # print(f"computing t_block {t_block} idx_branch {idx_branch}")
             idx_stop = list_injection_idx_ext[t_block+1]
@@ -352,6 +354,7 @@ class LatentBlending():
             # Convert latents to image directly for the last t_block
             if t_block == nmb_blocks_time-1:
                 self.tree_final_imgs[idx_branch] = self.latent2image(list_latents[-1])
+                self.tree_final_imgs_timing[idx_branch] = time.time() - time_start
             
         return self.tree_final_imgs
                 
@@ -930,6 +933,24 @@ def get_time(resolution=None):
 
 #%% le main
 if __name__ == "__main__":
+
+    #%% TMP SURGERY
+    num_inference_steps = 20 # Number of diffusion interations
+    list_nmb_branches = [2, 3, 10, 24] # Branching structure: how many branches
+    list_injection_strength = [0.0, 0.6, 0.8, 0.9] # Branching structure: how deep is the blending
+    width = 512 
+    height = 512
+    guidance_scale = 5
+    fixed_seeds = [993621550, 280335986]
+        
+    lb = LatentBlending(pipe, device, height, width, num_inference_steps, guidance_scale)
+    prompt1 = "photo of a beautiful forest covered in white flowers, ambient light, very detailed, magic"
+    prompt2 = "photo of an eerie statue surrounded by ferns and vines, analog photograph kodak portra, mystical ambience, incredible detail"
+    lb.set_prompt1(prompt1)
+    lb.set_prompt2(prompt2)
+    
+    imgs_transition = lb.run_transition(list_nmb_branches, list_injection_strength, fixed_seeds=fixed_seeds)    
+    
 
     #%% LOOP
     list_prompts = []
