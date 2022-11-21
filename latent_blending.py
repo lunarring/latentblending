@@ -1484,8 +1484,6 @@ if __name__ == "__main__":
     pipe = StableDiffusionPipeline.from_pretrained(
         model_path,
         revision="fp16", 
-        height = height,
-        width = width,
         torch_dtype=torch.float16,
         scheduler=DDIMScheduler(),
         use_auth_token=True
@@ -1494,33 +1492,44 @@ if __name__ == "__main__":
     
     #%% seed cherrypicking
     
-    prompt1 = "photo of a surreal brutalistic vault that is glowing in the night, futuristic, greek ornaments, spider webs"
+    prompt1 = "photo of an eerie statue surrounded by ferns and vines"
     lb.set_prompt1(prompt1)
     
-    for i in range(1):
-        seed = 753528763 #np.random.randint(753528763)
+    for i in range(4):
+        seed = np.random.randint(753528763)
         lb.set_seed(seed)
-        txt = f"{i} {seed}"
+        txt = f"index {i+1} {seed}: {prompt1}"
         img = lb.run_diffusion(lb.text_embedding1, return_image=True)
         plt.imshow(img)
-        plt.title(txt)
+#        plt.title(txt)
         plt.show()
         print(txt)
         
+    #%% prompt finetuning
+    seed = 280335986
+    prompt1 = "photo of an eerie statue surrounded by ferns and vines, analog photograph kodak portra, mystical ambience, incredible detail"
+    lb.set_prompt1(prompt1)
+    img = lb.run_diffusion(lb.text_embedding1, return_image=True)
+    plt.imshow(img)
     
+    #%% lets make a nice mask
+    
+    
+    
+    #%% storage
     
     #%% make nice images of latents
     num_inference_steps = 10 # Number of diffusion interations
-    list_nmb_branches = [2, 3, 7, 12] # Specify the branching structure 
-    list_injection_idx = [0, 2, 5, 8] # Specify the branching structure
+    list_nmb_branches = [2, 3, 7, 10] # Specify the branching structure 
+    list_injection_idx = [0, 6, 7, 8] # Specify the branching structure
     width = 512 
     height = 512
     guidance_scale = 5
-    fixed_seeds = [993621550, 326814432]
+    fixed_seeds = [993621550, 280335986]
         
     lb = LatentBlending(pipe, device, height, width, num_inference_steps, guidance_scale)
     prompt1 = "photo of a beautiful forest covered in white flowers, ambient light, very detailed, magic"
-    prompt2 = "photo of a mystical sculpture in the middle of the desert, warm sunlight, sand, eery feeling"
+    prompt2 = "photo of an eerie statue surrounded by ferns and vines, analog photograph kodak portra, mystical ambience, incredible detail"
     lb.set_prompt1(prompt1)
     lb.set_prompt2(prompt2)
     
@@ -1535,9 +1544,28 @@ if __name__ == "__main__":
                 fn = f"d{d}_b{b}_x{x}.jpg"
                 ip.save(os.path.join(dp_tmp, fn), img)
                 
-            
-        
+    #%% get source img
+    seed = 280335986
+    prompt1 = "photo of a futuristic alien temple resting in the desert, mystic, sunlight"
+    lb.set_prompt1(prompt1)
+    lb.init_inpainting(init_empty=True)
+    
 
+    for i in range(5):
+        seed = np.random.randint(753528763)
+        lb.set_seed(seed)
+        txt = f"index {i+1} {seed}: {prompt1}"
+        img = lb.run_diffusion(lb.text_embedding1, return_image=True)
+        plt.imshow(img)
+#        plt.title(txt)
+        plt.show()
+        print(txt)
+     
+    #%%
+"""
+index 3 303856737: photo of a futuristic alien temple resting in the desert, mystic, sunlight
+
+"""
     
     #%%
     """

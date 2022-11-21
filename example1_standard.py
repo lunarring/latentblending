@@ -59,32 +59,30 @@ pipe = StableDiffusionPipeline.from_pretrained(
 pipe = pipe.to(device)
     
 #%% Next let's set up all parameters
-
+# FIXME below fix numbers
 # We want 20 diffusion steps, begin with 2 branches, have 3 branches at step 12 (=0.6*20)
 # 10 branches at step 16 (=0.8*20) and 24 branches at step 18 (=0.9*20)
 # Furthermore we want seed 993621550 for keyframeA and seed 54878562 for keyframeB ()
 
-num_inference_steps = 30 # Number of diffusion interations
-list_nmb_branches = [2, 6, 30, 100] # Specify the branching structure 
-list_injection_strength = [0.0, 0.3, 0.73, 0.93] # Specify the branching structure
+num_inference_steps = 100 # Number of diffusion interations
+list_nmb_branches = [2, 12, 30, 100, 300] # Specify the branching structure 
+list_injection_strength = [0.0, 0.75, 0.9, 0.93, 0.96] # Specify the branching structure
 width = 512 
 height = 512
 guidance_scale = 5
-#fixed_seeds = [993621550, 326814432]
-#fixed_seeds = [993621550, 888839807]
-fixed_seeds = [993621550, 753528763]
+fixed_seeds = [993621550, 280335986]
     
 lb = LatentBlending(pipe, device, height, width, num_inference_steps, guidance_scale)
 prompt1 = "photo of a beautiful forest covered in white flowers, ambient light, very detailed, magic"
-prompt2 = "photo of a mystical sculpture in the middle of the desert, warm sunlight, sand, eery feeling"
+prompt2 = "photo of an eerie statue surrounded by ferns and vines, analog photograph kodak portra, mystical ambience, incredible detail"
 lb.set_prompt1(prompt1)
 lb.set_prompt2(prompt2)
 
+
+
 imgs_transition = lb.run_transition(list_nmb_branches, list_injection_strength, fixed_seeds=fixed_seeds)
 
-#%
-
-# let's get more frames
+# let's get more cheap frames via linear interpolation
 duration_transition = 12
 fps = 60
 imgs_transition_ext = add_frames_linear_interp(imgs_transition, duration_transition, fps)
@@ -99,4 +97,3 @@ for img in tqdm(imgs_transition_ext):
 ms.finalize()
 
 
-# MOVIE TODO: ueberschreiben! bad prints.
