@@ -18,11 +18,12 @@ torch.backends.cudnn.benchmark = False
 import numpy as np
 import warnings
 warnings.filterwarnings('ignore')
+import time
+import subprocess
 import warnings
 import torch
 from tqdm.auto import tqdm
-from diffusers import StableDiffusionPipeline
-from diffusers.schedulers import DDIMScheduler
+from diffusers import StableDiffusionInpaintPipeline
 from PIL import Image
 import matplotlib.pyplot as plt
 import torch
@@ -33,26 +34,38 @@ torch.set_grad_enabled(False)
 
 #%% First let us spawn a diffusers pipe using DDIMScheduler
 device = "cuda:0"
-model_path = "../stable_diffusion_models/stable-diffusion-v1-5"
+model_path = "../stable_diffusion_models/stable-diffusion-inpainting"
 
-scheduler = DDIMScheduler(beta_start=0.00085,
-            beta_end=0.012,
-            beta_schedule="scaled_linear",
-            clip_sample=False,
-            set_alpha_to_one=False)
-            
-pipe = StableDiffusionPipeline.from_pretrained(
+pipe = StableDiffusionInpaintPipeline.from_pretrained(
     model_path,
     revision="fp16", 
     torch_dtype=torch.float16,
-    scheduler=scheduler,
-    use_auth_token=True
+    safety_checker=None
 )
 pipe = pipe.to(device)
-    
+
+
+#%% Let's make a source image and mask.
+height = 512
+width = 512
+num_inference_steps = 30
+guidance_scale = 5
+fixed_seeds = [629575320, 670154945]
+
+lb = LatentBlending(pipe, device, height, width, num_inference_steps, guidance_scale)
+prompt1 = "photo of a futuristic alien temple in a desert, mystic, glowing, organic, intricate, sci-fi movie, mesmerizing, scary"
+lb.set_prompt1(prompt1)
+lb.init_inpainting(init_empty=True)
+lb.set_seed(fixed_seeds[0])
+image_source = lb.run_diffusion(lb.text_embedding1, return_image=True)
+mask_image = 255*np.ones([512,512], dtype=np.uint8)
+mask_image[160:250, 200:320] = 0
+mask_image = Image.fromarray(mask_image)
+
+
 #%% Next let's set up all parameters
 # FIXME below fix numbers
-# We want 20 diffusion steps in total, begin with 2 branches, have 3 branches at step 12 (=0.6*20)
+# We want 20 diffusion steps, begin with 2 branches, have 3 branches at step 12 (=0.6*20)
 # 10 branches at step 16 (=0.8*20) and 24 branches at step 18 (=0.9*20)
 # Furthermore we want seed 993621550 for keyframeA and seed 54878562 for keyframeB ()
 
@@ -65,12 +78,11 @@ guidance_scale = 5
 fixed_seeds = [993621550, 280335986]
     
 lb = LatentBlending(pipe, device, height, width, num_inference_steps, guidance_scale)
-prompt1 = "photo of a beautiful forest covered in white flowers, ambient light, very detailed, magic"
-prompt2 = "photo of an eerie statue surrounded by ferns and vines, analog photograph kodak portra, mystical ambience, incredible detail"
+prompt1 = "photo of a futuristic alien temple in a desert, mystic, glowing, organic, intricate, sci-fi movie, mesmerizing, scary"
+prompt2 = "aerial photo of a futuristic alien temple in a coastal area, waves clashing"
 lb.set_prompt1(prompt1)
 lb.set_prompt2(prompt2)
-
-
+lb.init_inpainting(image_source, mask_image)
 
 imgs_transition = lb.run_transition(list_nmb_branches, list_injection_strength, fixed_seeds=fixed_seeds)
 
