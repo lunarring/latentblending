@@ -51,39 +51,53 @@ pipe = StableDiffusionPipeline.from_pretrained(
 pipe = pipe.to(device)
     
 #%% Next let's set up all parameters
-# FIXME below fix numbers
-# We want 20 diffusion steps in total, begin with 2 branches, have 3 branches at step 12 (=0.6*20)
-# 10 branches at step 16 (=0.8*20) and 24 branches at step 18 (=0.9*20)
-# Furthermore we want seed 993621550 for keyframeA and seed 54878562 for keyframeB ()
+num_inference_steps = 30 # Number of diffusion interations
+list_nmb_branches = [2, 3, 10, 24]#, 50] # Branching structure: how many branches
+list_injection_strength = [0.0, 0.6, 0.8, 0.9]#, 0.95] # Branching structure: how deep is the blending
 
-num_inference_steps = 20 # Number of diffusion interations
-list_nmb_branches = [2, 3, 10, 24] # Branching structure: how many branches
-list_injection_strength = [0.0, 0.6, 0.8, 0.9] # Branching structure: how deep is the blending
-width = 512 
+width = 512
 height = 512
 guidance_scale = 5
-fixed_seeds = [993621550, 280335986]
-    
+fps = 30
+duration_target = 10
+width = 512
+height = 512
+
 lb = LatentBlending(pipe, device, height, width, num_inference_steps, guidance_scale)
-prompt1 = "photo of a beautiful forest covered in white flowers, ambient light, very detailed, magic"
-prompt2 = "photo of an eerie statue surrounded by ferns and vines, analog photograph kodak portra, mystical ambience, incredible detail"
-lb.set_prompt1(prompt1)
-lb.set_prompt2(prompt2)
-
-imgs_transition = lb.run_transition(list_nmb_branches, list_injection_strength, fixed_seeds=fixed_seeds)
-
-# let's get more cheap frames via linear interpolation
-duration_transition = 12
-fps = 60
-imgs_transition_ext = add_frames_linear_interp(imgs_transition, duration_transition, fps)
-
-# movie saving
-fp_movie = f"/home/lugo/tmp/latentblending/bobo_incoming.mp4"
-if os.path.isfile(fp_movie):
-    os.remove(fp_movie)
-ms = MovieSaver(fp_movie, fps=fps)
-for img in tqdm(imgs_transition_ext):
-    ms.write_frame(img)
-ms.finalize()
 
 
+list_prompts = []
+list_prompts.append("surrealistic statue made of glitter and dirt, standing in a lake, atmospheric light, strange glow")
+list_prompts.append("weird statue of a frog monkey, many colors, standing next to the ruins of an ancient city")
+list_prompts.append("statue of a mix between a tree and human, made of marble, incredibly detailed")
+list_prompts.append("statue made of hot metal, bizzarre, dark clouds in the sky")
+list_prompts.append("statue of a spider that looked like a human")
+list_prompts.append("statue of a bird that looked like a scorpion")
+list_prompts.append("statue of an ancient cybernetic messenger annoucing good news, golden, futuristic")
+
+k = 6
+
+prompt = list_prompts[k]
+for i in range(4):
+    lb.set_prompt1(prompt)
+    
+    seed = np.random.randint(999999999)
+    lb.set_seed(seed)
+    plt.imshow(lb.run_diffusion(lb.text_embedding1, return_image=True))
+    plt.title(f"{i} seed {seed}")
+    plt.show()
+    print(f"prompt {k} seed {seed} trial {i}")
+    
+#%%
+
+"""
+
+prompt 3 seed 28652396 trial 2
+prompt 4 seed 783279867 trial 3
+prompt 5 seed 831049796 trial 3
+
+prompt 6 seed 798876383 trial 2
+prompt 6 seed 750494819 trial 2
+prompt 6 seed 416472011 trial 1
+
+"""

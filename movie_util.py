@@ -202,6 +202,11 @@ class MovieReader():
 
 #%%
 if __name__ == "__main__": 
+    ms = MovieSaver("/tmp/bubu.mp4", fps=fps)
+    for img in list_imgs_interp:
+        ms.write_frame(img)
+    ms.finalize()
+if False:
     fps=2
     list_fp_movies = []
     for k in range(4):
