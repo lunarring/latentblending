@@ -138,7 +138,7 @@ class MovieSaver():
         self.ffmpg_process.stdin.close()
         self.ffmpg_process.wait()
         duration = int(self.nmb_frames / self.fps)
-        print(f"Movie saved, {duration}s playtime, watch her: {self.fp_out}")
+        print(f"Movie saved, {duration}s playtime, watch here: \n{self.fp_out}")
 
 
 
@@ -176,7 +176,7 @@ def concatenate_movies(fp_final: str, list_fp_movies: List[str]):
     cmd = f'ffmpeg -f concat -safe 0 -i {fp_list} -c copy {fp_final}'
     subprocess.call(cmd, shell=True, cwd=dp_movie)
     os.remove(fp_list)
-    print(f"concatenate_movies: success! Watch here: {fp_final}")
+    print(f"concatenate_movies: success! Watch here: \n{fp_final}")
 
             
 class MovieReader():
