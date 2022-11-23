@@ -832,16 +832,30 @@ def interpolate_linear(p0, p1, fract_mixing):
     Helper function to mix two variables using standard linear interpolation.
     Args:
         p0: 
-            First tensor for interpolation
+            First tensor / np.ndarray for interpolation
         p1: 
-            Second tensor for interpolation
+            Second tensor / np.ndarray  for interpolation
         fract_mixing: float 
             Mixing coefficient of interval [0, 1]. 
             0 will return in p0
             1 will return in p1
             0.x will return a linear mix between both.
     """ 
-    return (1-fract_mixing) * p0 + fract_mixing * p1
+    reconvert_uint8 = False
+    if type(p0) is np.ndarray and p0.dtype == 'uint8':
+        reconvert_uint8 = True
+        p0 = p0.astype(np.float64)
+        
+    if type(p1) is np.ndarray and p1.dtype == 'uint8':
+        reconvert_uint8 = True
+        p1 = p1.astype(np.float64)
+    
+    interp = (1-fract_mixing) * p0 + fract_mixing * p1
+    
+    if reconvert_uint8:
+        interp = np.clip(interp, 0, 255).astype(np.uint8)
+        
+    return interp
 
 
 def add_frames_linear_interp(
