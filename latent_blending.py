@@ -32,10 +32,11 @@ from diffusers.schedulers import DDIMScheduler
 from PIL import Image
 import matplotlib.pyplot as plt
 import torch
-from movie_man import MovieSaver
+from movie_util import MovieSaver
 import datetime
 from typing import Callable, List, Optional, Union
 import inspect
+from threading import Thread
 torch.set_grad_enabled(False)
 
 #%% 
@@ -95,6 +96,7 @@ class LatentBlending():
         self.list_injection_idx_prev = []
         self.text_embedding1 = None
         self.text_embedding2 = None
+        self.stop_diffusion = False
         
     
     def check_asserts(self):
@@ -231,6 +233,9 @@ class LatentBlending():
                 fixed_seeds = list(np.random.randint(0, 1000000, 2).astype(np.int32))
             else:
                 assert len(fixed_seeds)==2, "Supply a list with len = 2"
+                
+        # Process interruption variable
+        self.stop_diffusion = False
         
         # Recycling? There are requirements
         if recycle_img1 or recycle_img2:
@@ -286,9 +291,11 @@ class LatentBlending():
                 if recycle_img1:
                     self.tree_status[t_block][0] = 'computed'
                     self.tree_final_imgs[0] = self.latent2image(self.tree_latents[-1][0][-1])
+                    self.tree_final_imgs_timing[0] = 0
                 if recycle_img2:
                     self.tree_status[t_block][-1] = 'computed'
                     self.tree_final_imgs[-1] = self.latent2image(self.tree_latents[-1][-1][-1])
+                    self.tree_final_imgs_timing[-1] = 0
                     
         # setup compute order: goal: try to get last branch computed asap. 
         # first compute the right keyframe. needs to be there in any case
@@ -324,6 +331,10 @@ class LatentBlending():
         # Diffusion computations start here
         time_start = time.time()
         for t_block, idx_branch in tqdm(list_compute, desc="computing transition"):
+            if self.stop_diffusion:
+                print("run_transition: process interrupted")
+                return self.tree_final_imgs
+            
             # print(f"computing t_block {t_block} idx_branch {idx_branch}")
             idx_stop = list_injection_idx_ext[t_block+1]
             fract_mixing = self.tree_fracts[t_block][idx_branch]
@@ -933,26 +944,64 @@ def get_time(resolution=None):
 
 #%% le main
 if __name__ == "__main__":
+        
+    device = "cuda:0"
+    model_path = "../stable_diffusion_models/stable-diffusion-v1-5"
     
-
+    scheduler = DDIMScheduler(beta_start=0.00085,
+                beta_end=0.012,
+                beta_schedule="scaled_linear",
+                clip_sample=False,
+                set_alpha_to_one=False)
+                
+    pipe = StableDiffusionPipeline.from_pretrained(
+        model_path,
+        revision="fp16", 
+        torch_dtype=torch.float16,
+        scheduler=scheduler,
+        use_auth_token=True
+    )
+    pipe = pipe.to(device)
         
+    num_inference_steps = 20 # Number of diffusion interations
+    list_nmb_branches = [2, 3, 10, 24] # Branching structure: how many branches
+    list_injection_strength = [0.0, 0.6, 0.8, 0.9] # Branching structure: how deep is the blending
+    width = 512 
+    height = 512
+    guidance_scale = 5
+    fixed_seeds = [993621550, 280335986]
+        
+    lb = LatentBlending(pipe, device, height, width, num_inference_steps, guidance_scale)
+    prompt1 = "photo of a beautiful forest covered in white flowers, ambient light, very detailed, magic"
+    prompt2 = "photo of an eerie statue surrounded by ferns and vines, analog photograph kodak portra, mystical ambience, incredible detail"
+    lb.set_prompt1(prompt1)
+    lb.set_prompt2(prompt2)
+    
+    imgs_transition = lb.run_transition(list_nmb_branches, list_injection_strength, fixed_seeds=fixed_seeds)
+    
+    xxx
+
+#%%
 
 
-    #%%
-    """
-    TODO Coding:
-        RUNNING WITHOUT PROMPT!
-        
-        auto mode (quality settings)
-        save value ranges, can it be trashed?
-        set all variables in init! self.img2...
-        
-    TODO Other:
-        github
-        write text
-        requirements
-        make graphic explaining
-        make colab
-        license
-        twitter et al
-    """
+
+
+
+#%%
+"""
+TODO Coding:
+    RUNNING WITHOUT PROMPT!
+    
+    auto mode (quality settings)
+    save value ranges, can it be trashed?
+    set all variables in init! self.img2...
+    
+TODO Other:
+    github
+    write text
+    requirements
+    make graphic explaining
+    make colab
+    license
+    twitter et al
+"""
