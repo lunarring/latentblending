@@ -213,7 +213,7 @@ class LatentBlending():
         
         if list_injection_strength is None:
             assert list_injection_idx is not None, "Supply either list_injection_idx or list_injection_strength"
-            assert isinstance(list_injection_idx[0], int), "Need to supply integers for list_injection_idx"
+            assert isinstance(list_injection_idx[0], int) or isinstance(list_injection_idx[0], np.int) , "Need to supply integers for list_injection_idx"
             
         if list_injection_idx is None:
             assert list_injection_strength is not None, "Supply either list_injection_idx or list_injection_strength"
@@ -222,7 +222,7 @@ class LatentBlending():
             assert min(np.diff(list_injection_idx)) > 0, 'Injection idx needs to be increasing'
             if min(np.diff(list_injection_idx)) < 2:
                 print("Warning: your injection spacing is very tight. consider increasing the distances")
-            assert isinstance(list_injection_strength[1], np.floating), "Need to supply floats for list_injection_strength"
+            assert isinstance(list_injection_strength[1], np.floating) or isinstance(list_injection_strength[1], float), "Need to supply floats for list_injection_strength"
             # we are checking element 1 in list_injection_strength because "0" is an int... [0, 0.5]
         
         assert max(list_injection_idx) < self.num_inference_steps, "Decrease the injection index or strength"
