@@ -659,8 +659,13 @@ class LatentBlending():
         Args:
             prompt: str
                 ABC trending on artstation painted by Old Greg.
-        """        
-        uncond_tokens = [""]
+        """
+        if self.negative_prompt is None:
+            uncond_tokens = [""]
+        else:
+            if isinstance(self.negative_prompt, str):
+                uncond_tokens = [self.negative_prompt]
+            
         batch_size = 1
         num_images_per_prompt = 1
         do_classifier_free_guidance = True
@@ -972,7 +977,8 @@ if __name__ == "__main__":
     fixed_seeds = [993621550, 280335986]
         
     lb = LatentBlending(pipe, device, height, width, num_inference_steps, guidance_scale)
-    prompt1 = "photo of a beautiful forest covered in white flowers, ambient light, very detailed, magic"
+    lb.negative_prompt = 'text, letters'
+    prompt1 = "photo of a beautiful newspaper covered in white flowers, ambient light, very detailed, magic"
     prompt2 = "photo of an eerie statue surrounded by ferns and vines, analog photograph kodak portra, mystical ambience, incredible detail"
     lb.set_prompt1(prompt1)
     lb.set_prompt2(prompt2)
