@@ -51,22 +51,17 @@ pipe = StableDiffusionPipeline.from_pretrained(
 pipe = pipe.to(device)
     
 #%% MULTITRANS
-# XXX FIXME AssertionError: Need to supply floats for list_injection_strength
-# GO AS DEEP AS POSSIBLE WITHOUT CAUSING MOTION
 
-num_inference_steps = 100 # Number of diffusion interations
-#list_nmb_branches = [2, 12, 24, 55, 77] # Branching structure: how many branches
-#list_injection_strength = [0.0, 0.35, 0.5, 0.65, 0.95] # Branching structure: how deep is the blending
-list_nmb_branches = list(np.linspace(2, 600, 15).astype(int)) #
-list_injection_strength = list(np.linspace(0.45, 0.97, 14).astype(np.float32)) # Branching structure: how deep is the blending
-list_injection_strength = [float(x) for x in list_injection_strength]
-list_injection_strength.insert(0,0.0)
+num_inference_steps = 30 # Number of diffusion interations
+list_nmb_branches = [2, 10, 50, 100, 200] #
+list_injection_strength = list(np.linspace(0.5, 0.95, 4)) # Branching structure: how deep is the blending
+list_injection_strength.insert(0, 0.0)
 
 width = 512
 height = 512
 guidance_scale = 5
 fps = 30
-duration_target = 20
+duration_single_trans = 20
 width = 512
 height = 512
 
@@ -87,31 +82,19 @@ list_prompts.append("statue of an ancient cybernetic messenger annoucing good ne
 
 list_seeds = [234187386, 422209351, 241845736, 28652396, 783279867, 831049796, 234903931]
 
-
-fp_movie = "/home/lugo/tmp/latentblending/bubu.mp4"
+fp_movie = "/home/lugo/tmp/latentblending/bubua.mp4"
 ms = MovieSaver(fp_movie, fps=fps)
 
-for i in range(len(list_prompts)-1):
-    print(f"Starting movie segment {i+1}/{len(list_prompts)-1}")
-    
-    if i==0:
-        lb.set_prompt1(list_prompts[i])
-        lb.set_prompt2(list_prompts[i+1])
-        recycle_img1 = False    
-    else:
-        lb.swap_forward()
-        lb.set_prompt2(list_prompts[i+1])
-        recycle_img1 = True    
-    
-    local_seeds = [list_seeds[i], list_seeds[i+1]]
-    list_imgs = lb.run_transition(list_nmb_branches, list_injection_strength, recycle_img1=recycle_img1, fixed_seeds=local_seeds)
-    list_imgs_interp = add_frames_linear_interp(list_imgs, fps, duration_target)
-    
-    # Save movie frame
-    for img in list_imgs_interp:
-        ms.write_frame(img)
-        
-ms.finalize()
+lb.run_multi_transition(
+        list_prompts, 
+        list_seeds, 
+        list_nmb_branches, 
+        list_injection_strength=list_injection_strength, 
+        ms=ms, 
+        fps=fps, 
+        duration_single_trans=duration_single_trans
+    )
+
 
 #%%
 #for img in lb.tree_final_imgs:

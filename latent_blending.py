@@ -97,6 +97,7 @@ class LatentBlending():
         self.text_embedding1 = None
         self.text_embedding2 = None
         self.stop_diffusion = False
+        self.negative_prompt = None
         
     
     def check_asserts(self):
@@ -212,7 +213,7 @@ class LatentBlending():
         
         if list_injection_strength is None:
             assert list_injection_idx is not None, "Supply either list_injection_idx or list_injection_strength"
-            assert type(list_injection_idx[0]) is int, "Need to supply integers for list_injection_idx"
+            assert isinstance(list_injection_idx[0], int), "Need to supply integers for list_injection_idx"
             
         if list_injection_idx is None:
             assert list_injection_strength is not None, "Supply either list_injection_idx or list_injection_strength"
@@ -221,7 +222,7 @@ class LatentBlending():
             assert min(np.diff(list_injection_idx)) > 0, 'Injection idx needs to be increasing'
             if min(np.diff(list_injection_idx)) < 2:
                 print("Warning: your injection spacing is very tight. consider increasing the distances")
-            assert type(list_injection_strength[1]) is float, "Need to supply floats for list_injection_strength"
+            assert isinstance(list_injection_strength[1], np.floating), "Need to supply floats for list_injection_strength"
             # we are checking element 1 in list_injection_strength because "0" is an int... [0, 0.5]
         
         assert max(list_injection_idx) < self.num_inference_steps, "Decrease the injection index or strength"
@@ -369,6 +370,71 @@ class LatentBlending():
             
         return self.tree_final_imgs
                 
+
+    def run_multi_transition(
+            self,
+            list_prompts: List[str],
+            list_seeds: List[int] = None,
+            list_nmb_branches: List[int] = None, 
+            list_injection_strength: List[float] = None, 
+            list_injection_idx: List[int] = None, 
+            ms: MovieSaver = None,
+            fps: float = 24,
+            duration_single_trans: float = 15,
+        ):
+        r"""
+        Runs multiple transitions and stitches them together. You can supply the seeds for each prompt.
+        Args:
+            list_prompts: List[float]:
+                list of the prompts. There will be a transition starting from the first to the last.
+            list_seeds: List[int] = None: 
+                Random Seeds for each prompt.
+            list_nmb_branches: List[int]:
+                list of the number of branches for each injection.
+            list_injection_strength: List[float]:
+                list of injection strengths within interval [0, 1), values need to be increasing.
+                Alternatively you can direclty specify the list_injection_idx.
+            list_injection_idx: List[int]:
+                list of injection strengths within interval [0, 1), values need to be increasing.
+                Alternatively you can specify the list_injection_strength.
+            ms: MovieSaver
+                You need to spawn a moviesaver instance.
+            fps: float:
+                frames per second
+            duration_single_trans: float:
+                The duration of a single transition prompt[i] -> prompt[i+1].
+                The duration of your movie will be duration_single_trans * len(list_prompts)
+            
+        """
+        if list_seeds is None:
+            list_seeds = list(np.random.randint(0, 10e10, len(list_prompts)))
+            
+        assert len(list_prompts) == len(list_seeds), "Supply the same number of prompts and seeds"
+        
+        for i in range(len(list_prompts)-1):
+            print(f"Starting movie segment {i+1}/{len(list_prompts)-1}")
+            
+            if i==0:
+                self.set_prompt1(list_prompts[i])
+                self.set_prompt2(list_prompts[i+1])
+                recycle_img1 = False    
+            else:
+                self.swap_forward()
+                self.set_prompt2(list_prompts[i+1])
+                recycle_img1 = True    
+            
+            local_seeds = [list_seeds[i], list_seeds[i+1]]
+            list_imgs = lb.run_transition(list_nmb_branches, list_injection_strength=list_injection_strength, list_injection_idx=list_injection_idx, recycle_img1=recycle_img1, fixed_seeds=local_seeds)
+            list_imgs_interp = add_frames_linear_interp(list_imgs, fps, duration_single_trans)
+            
+            # Save movie frame
+            for img in list_imgs_interp:
+                ms.write_frame(img)
+                
+        ms.finalize()
+        
+        print("run_multi_transition: All completed.")
+
 
     @torch.no_grad()
     def run_diffusion(
@@ -1003,7 +1069,45 @@ if __name__ == "__main__":
 
 #%%
 
-
+    num_inference_steps = 30 # Number of diffusion interations
+    list_nmb_branches = [2, 10, 50, 100, 200] #
+    list_injection_strength = list(np.linspace(0.5, 0.95, 4)) # Branching structure: how deep is the blending
+    list_injection_strength.insert(0, 0.0)
+    
+    width = 512
+    height = 512
+    guidance_scale = 5
+    fps = 30
+    duration_single_trans = 20
+    width = 512
+    height = 512
+    
+    lb = LatentBlending(pipe, device, height, width, num_inference_steps, guidance_scale)
+    
+    list_prompts = []
+    list_prompts.append("surrealistic statue made of glitter and dirt, standing in a lake, atmospheric light, strange glow")
+    list_prompts.append("statue of a mix between a tree and human, made of marble, incredibly detailed")
+    list_prompts.append("weird statue of a frog monkey, many colors, standing next to the ruins of an ancient city")
+    list_prompts.append("statue made of hot metal, bizzarre, dark clouds in the sky")
+    list_prompts.append("statue of a spider that looked like a human")
+    list_prompts.append("statue of a bird that looked like a scorpion")
+    list_prompts.append("statue of an ancient cybernetic messenger annoucing good news, golden, futuristic")
+    
+    
+    list_seeds = [234187386, 422209351, 241845736, 28652396, 783279867, 831049796, 234903931]
+    
+    fp_movie = "/home/lugo/tmp/latentblending/bubua.mp4"
+    ms = MovieSaver(fp_movie, fps=fps)
+    
+    lb.run_multi_transition(
+            list_prompts, 
+            list_seeds, 
+            list_nmb_branches, 
+            list_injection_strength=list_injection_strength, 
+            ms=ms, 
+            fps=fps, 
+            duration_single_trans=duration_single_trans
+        )
 
 
 
