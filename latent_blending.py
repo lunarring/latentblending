@@ -1027,6 +1027,77 @@ def get_time(resolution=None):
         raise ValueError("bad resolution provided: %s" %resolution)
     return t
 
+def get_branching(
+        quality: str = 'medium',
+        depth: str = 'medium',
+    ):
+    r"""
+    Helper function to set up the branching structure automatically.
+    
+    Args:
+        quality: str 
+            Determines how many diffusion steps are being made + how many branches in total.
+            Choose: fast, medium, high, ultra
+        quality: depth 
+            Determines how deep the first injection will happen. 
+            Deeper injections will cause (unwanted) formation of new structures,
+            more shallow values will go into alpha-blendy land
+            Choose: verydeep, deep, medium, shallow, veryshallow
+    """ 
+    nmb_mindist = 3 #minimum distance between injections
+    
+    if depth == 'verydeep':
+        strength_injection_first = 0.35
+    elif depth == 'deep':
+        strength_injection_first = 0.45
+    elif depth == 'medium':
+        strength_injection_first = 0.6
+    elif depth == 'shallow':
+        strength_injection_first = 0.8
+    elif depth == 'veryshallow':
+        strength_injection_first = 0.9
+    else: 
+        raise ValueError("depth = '{depth}' not supported")
+    
+    if quality == 'fast':
+        num_iterations = 15
+        nmb_branches_final = 6
+    elif quality == 'medium':
+        num_iterations = 30
+        nmb_branches_final = 30
+    elif quality == 'high':
+        num_iterations = 60
+        nmb_branches_final = 150
+    elif quality == 'ultra':
+        num_iterations = 100
+        nmb_branches_final = 300
+    else: 
+        raise ValueError("quality = '{quality}' not supported")
+    
+    idx_injection_first = int(np.round(num_iterations*strength_injection_first))
+    idx_injection_last = num_iterations - 3
+    nmb_injections = int(np.floor(num_iterations/5)) - 1
+    
+    list_injection_idx = [0]
+    list_injection_idx.extend(np.linspace(idx_injection_first, idx_injection_last, nmb_injections).astype(int))
+    list_nmb_branches = np.round(np.logspace(np.log10(2), np.log10(nmb_branches_final), nmb_injections+1)).astype(int)
+    
+    # Cleanup. There should be at least 3 diffusion steps between each injection
+    list_injection_idx_clean = [list_injection_idx[0]]
+    list_nmb_branches_clean = [list_nmb_branches[0]]
+    idx_last_check = 0
+    for i in range(len(list_injection_idx)-1):
+        if list_injection_idx[i+1] - list_injection_idx_clean[idx_last_check] >= nmb_mindist:
+            list_injection_idx_clean.append(list_injection_idx[i+1])
+            list_nmb_branches_clean.append(list_nmb_branches[i+1])
+            idx_last_check +=1 
+    
+    print(f"num_iterations: {num_iterations}")
+    print(f"list_injection_idx: {list_injection_idx_clean}")
+    print(f"list_nmb_branches: {list_nmb_branches_clean}")
+    
+    return list_injection_idx_clean, list_nmb_branches_clean
+
 #%% le main
 if __name__ == "__main__":
         
@@ -1108,6 +1179,12 @@ if __name__ == "__main__":
             fps=fps, 
             duration_single_trans=duration_single_trans
         )
+
+#%% get good branching struct
+
+
+#%%
+
 
 
 
