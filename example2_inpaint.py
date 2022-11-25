@@ -27,22 +27,19 @@ from diffusers import StableDiffusionInpaintPipeline
 from PIL import Image
 import matplotlib.pyplot as plt
 import torch
-from movie_man import MovieSaver
+from movie_util import MovieSaver
 from typing import Callable, List, Optional, Union
 from latent_blending import LatentBlending, add_frames_linear_interp
+from stable_diffusion_holder import StableDiffusionHolder
 torch.set_grad_enabled(False)
 
-#%% First let us spawn a diffusers pipe using DDIMScheduler
+#%% First let us spawn a stable diffusion holder
 device = "cuda:0"
-model_path = "../stable_diffusion_models/stable-diffusion-inpainting"
+num_inference_steps = 20 # Number of diffusion interations
+fp_ckpt= "../stable_diffusion_models/ckpt/512-inpainting-ema.ckpt"
+fp_config = '../stablediffusion/configs//stable-diffusion/v2-inpainting-inference.yaml'
 
-pipe = StableDiffusionInpaintPipeline.from_pretrained(
-    model_path,
-    revision="fp16", 
-    torch_dtype=torch.float16,
-    safety_checker=None
-)
-pipe = pipe.to(device)
+sdh = StableDiffusionHolder(fp_ckpt, fp_config, device, num_inference_steps=num_inference_steps)
 
 
 #%% Let's make a source image and mask.
@@ -52,7 +49,7 @@ num_inference_steps = 30
 guidance_scale = 5
 fixed_seeds = [629575320, 670154945]
 
-lb = LatentBlending(pipe, device, height, width, num_inference_steps, guidance_scale)
+lb = LatentBlending(sdh, num_inference_steps, guidance_scale)
 prompt1 = "photo of a futuristic alien temple in a desert, mystic, glowing, organic, intricate, sci-fi movie, mesmerizing, scary"
 lb.set_prompt1(prompt1)
 lb.init_inpainting(init_empty=True)
@@ -77,7 +74,6 @@ height = 512
 guidance_scale = 5
 fixed_seeds = [993621550, 280335986]
     
-lb = LatentBlending(pipe, device, height, width, num_inference_steps, guidance_scale)
 prompt1 = "photo of a futuristic alien temple in a desert, mystic, glowing, organic, intricate, sci-fi movie, mesmerizing, scary"
 prompt2 = "aerial photo of a futuristic alien temple in a coastal area, waves clashing"
 lb.set_prompt1(prompt1)
@@ -92,12 +88,11 @@ fps = 60
 imgs_transition_ext = add_frames_linear_interp(imgs_transition, duration_transition, fps)
 
 # movie saving
-fp_movie = f"/home/lugo/tmp/latentblending/bobo_incoming.mp4"
+fp_movie = "/home/lugo/tmp/latentblending/bobo_incoming.mp4"
 if os.path.isfile(fp_movie):
     os.remove(fp_movie)
-ms = MovieSaver(fp_movie, fps=fps, profile='save')
+ms = MovieSaver(fp_movie, fps=fps, shape_hw=[lb.height, lb.width])
 for img in tqdm(imgs_transition_ext):
     ms.write_frame(img)
 ms.finalize()
-
 

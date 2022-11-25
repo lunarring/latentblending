@@ -29,44 +29,33 @@ import torch
 from movie_util import MovieSaver
 from typing import Callable, List, Optional, Union
 from latent_blending import LatentBlending, add_frames_linear_interp
+from stable_diffusion_holder import StableDiffusionHolder
 torch.set_grad_enabled(False)
 
-#%% First let us spawn a diffusers pipe using DDIMScheduler
+#%% First let us spawn a stable diffusion holder
 device = "cuda:0"
-model_path = "../stable_diffusion_models/stable-diffusion-v1-5"
+num_inference_steps = 20 # Number of diffusion interations
+fp_ckpt = "../stable_diffusion_models/ckpt/768-v-ema.ckpt"
+fp_config = '../stablediffusion/configs/stable-diffusion/v2-inference-v.yaml'
 
-scheduler = DDIMScheduler(beta_start=0.00085,
-            beta_end=0.012,
-            beta_schedule="scaled_linear",
-            clip_sample=False,
-            set_alpha_to_one=False)
-            
-pipe = StableDiffusionPipeline.from_pretrained(
-    model_path,
-    revision="fp16", 
-    torch_dtype=torch.float16,
-    scheduler=scheduler,
-    use_auth_token=True
-)
-pipe = pipe.to(device)
+sdh = StableDiffusionHolder(fp_ckpt, fp_config, device, num_inference_steps=num_inference_steps)
+
     
 #%% Next let's set up all parameters
 # FIXME below fix numbers
 # We want 20 diffusion steps in total, begin with 2 branches, have 3 branches at step 12 (=0.6*20)
 # 10 branches at step 16 (=0.8*20) and 24 branches at step 18 (=0.9*20)
 # Furthermore we want seed 993621550 for keyframeA and seed 54878562 for keyframeB ()
-
-num_inference_steps = 20 # Number of diffusion interations
 list_nmb_branches = [2, 3, 10, 24] # Branching structure: how many branches
 list_injection_strength = [0.0, 0.6, 0.8, 0.9] # Branching structure: how deep is the blending
-width = 512 
-height = 512
+width = 768 
+height = 768
 guidance_scale = 5
 fixed_seeds = [993621550, 280335986]
     
-lb = LatentBlending(pipe, device, height, width, num_inference_steps, guidance_scale)
+lb = LatentBlending(sdh, num_inference_steps, guidance_scale)
 prompt1 = "photo of a beautiful forest covered in white flowers, ambient light, very detailed, magic"
-prompt2 = "photo of an eerie statue surrounded by ferns and vines, analog photograph kodak portra, mystical ambience, incredible detail"
+prompt2 = "photo of an golden statue with a funny hat, surrounded by ferns and vines, grainy analog photograph,, mystical ambience, incredible detail"
 lb.set_prompt1(prompt1)
 lb.set_prompt2(prompt2)
 
@@ -78,7 +67,7 @@ fps = 60
 imgs_transition_ext = add_frames_linear_interp(imgs_transition, duration_transition, fps)
 
 # movie saving
-fp_movie = f"/home/lugo/tmp/latentblending/bobo_incoming.mp4"
+fp_movie = "/home/lugo/tmp/latentblending/bobo_incoming.mp4"
 if os.path.isfile(fp_movie):
     os.remove(fp_movie)
 ms = MovieSaver(fp_movie, fps=fps)
