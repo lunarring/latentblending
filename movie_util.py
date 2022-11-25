@@ -27,6 +27,7 @@ class MovieSaver():
             self, 
             fp_out: str,  
             fps: int = 24, 
+            shape_hw: List[int] = None,
             crf: int = 24,
             codec: str = 'libx264',
             preset: str ='fast',
@@ -42,6 +43,8 @@ class MovieSaver():
                 Output file name. If it already exists, it will be deleted.
             fps: int
                 Frames per second.
+            shape_hw: List[int, int]
+                Output shape, optional argument. Can be initialized automatically when first frame is written.
             crf: int
                 ffmpeg doc: the range of the CRF scale is 0–51, where 0 is lossless
                 (for 8 bit only, for 10 bit use -qp 0), 23 is the default, and 51 is worst quality possible. 
@@ -65,6 +68,7 @@ class MovieSaver():
             silent_ffmpeg: bool
                 Surpress the output from ffmpeg.
         """
+        assert os.path.isdir(os.path.split(fp_out)[0]), "Directory does not exist!"
         
         self.fp_out = fp_out
         self.fps = fps
@@ -79,7 +83,14 @@ class MovieSaver():
         
         self.init_done = False
         self.nmb_frames = 0
-        self.shape_hw = [-1, -1]
+        if shape_hw is None:
+            self.shape_hw = [-1, 1]
+        else:
+            if len(shape_hw) == 2:
+                shape_hw.append(3)
+            self.shape_hw = shape_hw
+            self.initialize()
+            
         
         print(f"MovieSaver initialized. fps={fps} crf={crf} pix_fmt={pix_fmt} codec={codec} preset={preset}")
         
@@ -97,7 +108,8 @@ class MovieSaver():
         else:
             self.ffmpg_process = subprocess.Popen(args, stdin=subprocess.PIPE)
         self.init_done = True
-        print(f"First frame initialization done. Movie shape: {self.shape_hw}")
+        self.shape_hw = tuple(self.shape_hw)
+        print(f"Initialization done. Movie shape: {self.shape_hw}")
     
         
     def write_frame(self, out_frame: np.ndarray):
@@ -119,7 +131,7 @@ class MovieSaver():
             self.shape_hw = out_frame.shape
             self.initialize()
             
-        assert self.shape_hw == out_frame.shape, "You cannot change the image size after init. Initialized with {self.shape_hw}, out_frame {out_frame.shape}"
+        assert self.shape_hw == out_frame.shape, f"You cannot change the image size after init. Initialized with {self.shape_hw}, out_frame {out_frame.shape}"
 
         # write frame        
         self.ffmpg_process.stdin.write(
@@ -176,7 +188,7 @@ def concatenate_movies(fp_final: str, list_fp_movies: List[str]):
     cmd = f'ffmpeg -f concat -safe 0 -i {fp_list} -c copy {fp_final}'
     subprocess.call(cmd, shell=True, cwd=dp_movie)
     os.remove(fp_list)
-    print(f"concatenate_movies: success! Watch here: \n{fp_final}")
+    print(f"concatenate_movies: success! Watch here: {fp_final}")
 
             
 class MovieReader():
@@ -202,11 +214,6 @@ class MovieReader():
 
 #%%
 if __name__ == "__main__": 
-    ms = MovieSaver("/tmp/bubu.mp4", fps=fps)
-    for img in list_imgs_interp:
-        ms.write_frame(img)
-    ms.finalize()
-if False:
     fps=2
     list_fp_movies = []
     for k in range(4):
