@@ -68,7 +68,8 @@ class MovieSaver():
             silent_ffmpeg: bool
                 Surpress the output from ffmpeg.
         """
-        assert os.path.isdir(os.path.split(fp_out)[0]), "Directory does not exist!"
+        if len(os.path.split(fp_out)[0]) > 0:
+            assert os.path.isdir(os.path.split(fp_out)[0]), "Directory does not exist!"
         
         self.fp_out = fp_out
         self.fps = fps
