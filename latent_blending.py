@@ -69,7 +69,6 @@ class LatentBlending():
         """
         self.sdh = sdh
         self.device = self.sdh.device
-        self.guidance_scale = guidance_scale
         self.width = self.sdh.width
         self.height = self.sdh.height
         self.seed = 420 #use self.set_seed or fixed_seeds argument in run_transition
@@ -90,7 +89,7 @@ class LatentBlending():
         self.num_inference_steps = -1
         self.list_injection_idx = None
         self.list_nmb_branches = None
-        
+        self.set_guidance_scale(guidance_scale)
         self.init_mode()
         
 
@@ -106,6 +105,12 @@ class LatentBlending():
         else:
             self.mode = 'standard'
             
+    def set_guidance_scale(self, guidance_scale):
+        r"""
+        sets the guidance scale.
+        """
+        self.guidance_scale = guidance_scale
+        self.sdh.guidance_scale = guidance_scale
 
     def set_prompt1(self, prompt: str):
         r"""
