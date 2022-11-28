@@ -49,7 +49,8 @@ num_inference_steps = 30
 guidance_scale = 5
 fixed_seeds = [629575320, 670154945]
 
-lb = LatentBlending(sdh, num_inference_steps, guidance_scale)
+lb = LatentBlending(sdh)
+lb.autosetup_branching("low")
 prompt1 = "photo of a futuristic alien temple in a desert, mystic, glowing, organic, intricate, sci-fi movie, mesmerizing, scary"
 lb.set_prompt1(prompt1)
 lb.init_inpainting(init_empty=True)
@@ -66,12 +67,6 @@ mask_image = Image.fromarray(mask_image)
 # 10 branches at step 16 (=0.8*20) and 24 branches at step 18 (=0.9*20)
 # Furthermore we want seed 993621550 for keyframeA and seed 54878562 for keyframeB ()
 
-num_inference_steps = 20 # Number of diffusion interations
-list_nmb_branches = [2, 3, 10, 24] # Branching structure: how many branches
-list_injection_strength = [0.0, 0.6, 0.8, 0.9] # Branching structure: how deep is the blending
-width = 512 
-height = 512
-guidance_scale = 5
 fixed_seeds = [993621550, 280335986]
     
 prompt1 = "photo of a futuristic alien temple in a desert, mystic, glowing, organic, intricate, sci-fi movie, mesmerizing, scary"
@@ -79,8 +74,7 @@ prompt2 = "aerial photo of a futuristic alien temple in a coastal area, waves cl
 lb.set_prompt1(prompt1)
 lb.set_prompt2(prompt2)
 lb.init_inpainting(image_source, mask_image)
-
-imgs_transition = lb.run_transition(list_nmb_branches, list_injection_strength, fixed_seeds=fixed_seeds)
+imgs_transition = lb.run_transition(fixed_seeds=fixed_seeds)
 
 # let's get more cheap frames via linear interpolation
 duration_transition = 12
@@ -88,7 +82,7 @@ fps = 60
 imgs_transition_ext = add_frames_linear_interp(imgs_transition, duration_transition, fps)
 
 # movie saving
-fp_movie = "/home/lugo/tmp/latentblending/bobo_incoming.mp4"
+fp_movie = "movie_example2.mp4"
 if os.path.isfile(fp_movie):
     os.remove(fp_movie)
 ms = MovieSaver(fp_movie, fps=fps, shape_hw=[lb.height, lb.width])
