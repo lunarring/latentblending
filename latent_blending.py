@@ -764,12 +764,15 @@ def get_branching(
             idx_last_check +=1 
     list_injection_idx_clean = [int(l) for l in list_injection_idx_clean]
     list_nmb_branches_clean = [int(l) for l in list_nmb_branches_clean]
+    
+    list_injection_idx = list_injection_idx_clean
+    list_nmb_branches = list_nmb_branches_clean
 
     print(f"num_inference_steps: {num_inference_steps}")
-    print(f"list_injection_idx: {list_injection_idx_clean}")
-    print(f"list_nmb_branches: {list_nmb_branches_clean}")
+    print(f"list_injection_idx: {list_injection_idx}")
+    print(f"list_nmb_branches: {list_nmb_branches}")
     
-    return num_inference_steps, list_injection_idx_clean, list_nmb_branches_clean
+    return num_inference_steps, list_injection_idx, list_nmb_branches
 
 
 
