@@ -32,32 +32,25 @@ torch.set_grad_enabled(False)
 
 #%% First let us spawn a stable diffusion holder
 device = "cuda:0"
-num_inference_steps = 20 # Number of diffusion interations
 fp_ckpt = "../stable_diffusion_models/ckpt/768-v-ema.ckpt"
 fp_config = '../stablediffusion/configs/stable-diffusion/v2-inference-v.yaml'
 
-sdh = StableDiffusionHolder(fp_ckpt, fp_config, device, num_inference_steps=num_inference_steps)
+sdh = StableDiffusionHolder(fp_ckpt, fp_config, device)
 
     
 #%% Next let's set up all parameters
-# FIXME below fix numbers
-# We want 20 diffusion steps in total, begin with 2 branches, have 3 branches at step 12 (=0.6*20)
-# 10 branches at step 16 (=0.8*20) and 24 branches at step 18 (=0.9*20)
-# Furthermore we want seed 993621550 for keyframeA and seed 54878562 for keyframeB ()
-list_nmb_branches = [2, 3, 10, 24] # Branching structure: how many branches
-list_injection_strength = [0.0, 0.6, 0.8, 0.9] # Branching structure: how deep is the blending
-width = 768 
-height = 768
 guidance_scale = 5
-fixed_seeds = [993621550, 280335986]
+quality = 'high'
+fixed_seeds = [69731932, 504430820]
     
-lb = LatentBlending(sdh, num_inference_steps, guidance_scale)
+lb = LatentBlending(sdh, guidance_scale)
 prompt1 = "photo of a beautiful forest covered in white flowers, ambient light, very detailed, magic"
-prompt2 = "photo of an golden statue with a funny hat, surrounded by ferns and vines, grainy analog photograph,, mystical ambience, incredible detail"
+prompt2 = "photo of an golden statue with a funny hat, surrounded by ferns and vines, grainy analog photograph, mystical ambience, incredible detail"
 lb.set_prompt1(prompt1)
 lb.set_prompt2(prompt2)
+lb.autosetup_branching(quality=quality)
 
-imgs_transition = lb.run_transition(list_nmb_branches, list_injection_strength, fixed_seeds=fixed_seeds)
+imgs_transition = lb.run_transition(fixed_seeds=fixed_seeds)
 
 # let's get more cheap frames via linear interpolation
 duration_transition = 12
@@ -65,10 +58,10 @@ fps = 60
 imgs_transition_ext = add_frames_linear_interp(imgs_transition, duration_transition, fps)
 
 # movie saving
-fp_movie = "movie_example1.mp4"
+fp_movie = f"movie_example1_{quality}.mp4"
 if os.path.isfile(fp_movie):
     os.remove(fp_movie)
-ms = MovieSaver(fp_movie, fps=fps)
+ms = MovieSaver(fp_movie, fps=fps, shape_hw=[sdh.height, sdh.width])
 for img in tqdm(imgs_transition_ext):
     ms.write_frame(img)
 ms.finalize()

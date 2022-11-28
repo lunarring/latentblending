@@ -47,9 +47,7 @@ class LatentBlending():
     def __init__(
             self, 
             sdh: None,
-            num_inference_steps: int = 30,
             guidance_scale: float = 7.5,
-            seed: int = 420,
         ):
         r"""
         Initializes the latent blending class.
@@ -59,8 +57,6 @@ class LatentBlending():
                 Height of the desired output image. The model was trained on 512.
             width: int
                 Width of the desired output image. The model was trained on 512.
-            num_inference_steps: int
-                Number of diffusion steps. Larger values will take more compute time.
             guidance_scale: float
                 Guidance scale as defined in [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598).
                 `guidance_scale` is defined as `w` of equation 2. of [Imagen
@@ -72,13 +68,11 @@ class LatentBlending():
             
         """
         self.sdh = sdh
-        self.num_inference_steps = num_inference_steps
-        self.sdh.num_inference_steps = num_inference_steps
         self.device = self.sdh.device
         self.guidance_scale = guidance_scale
         self.width = self.sdh.width
         self.height = self.sdh.height
-        self.seed = seed
+        self.seed = 420 #use self.set_seed or fixed_seeds argument in run_transition
     
         # Initialize vars
         self.prompt1 = ""
@@ -93,6 +87,9 @@ class LatentBlending():
         self.text_embedding2 = None
         self.stop_diffusion = False
         self.negative_prompt = None
+        self.num_inference_steps = -1
+        self.list_injection_idx = None
+        self.list_nmb_branches = None
         
         self.init_mode()
         
@@ -133,19 +130,92 @@ class LatentBlending():
         self.prompt2 = prompt
         self.text_embedding2 = self.get_text_embeddings(self.prompt2)
         
-    
-    def run_transition(
+    def autosetup_branching(
             self, 
-            list_nmb_branches: List[int], 
-            list_injection_strength: List[float] = None, 
-            list_injection_idx: List[int] = None, 
-            recycle_img1: Optional[bool] = False, 
-            recycle_img2: Optional[bool] = False, 
-            fixed_seeds: Optional[List[int]] = None,
+            quality: str = 'medium',
+            deepth_strength: float = 0.65,
+            nmb_frames: int = 360,
+            nmb_mindist: int = 3,
         ):
         r"""
-        Returns a list of transition images using spherical latent blending.
+        Helper function to set up the branching structure automatically.
+        
         Args:
+            quality: str 
+                Determines how many diffusion steps are being made + how many branches in total.
+                Tradeoff between quality and speed of computation.
+                Choose: lowest, low, medium, high, ultra
+            deepth_strength: float = 0.65,
+                Determines how deep the first injection will happen. 
+                Deeper injections will cause (unwanted) formation of new structures,
+                more shallow values will go into alpha-blendy land.
+            nmb_frames: int = 360,
+                total number of frames
+            nmb_mindist: int = 3 
+                minimum distance in terms of diffusion iteratinos between subsequent injections
+        """ 
+        
+        if quality == 'lowest':
+            num_inference_steps = 12
+            nmb_branches_final = 5
+        elif quality == 'low':
+            num_inference_steps = 15
+            nmb_branches_final = nmb_frames//16
+        elif quality == 'medium':
+            num_inference_steps = 30
+            nmb_branches_final = nmb_frames//8
+        elif quality == 'high':
+            num_inference_steps = 60
+            nmb_branches_final = nmb_frames//4
+        elif quality == 'ultra':
+            num_inference_steps = 100
+            nmb_branches_final = nmb_frames//2
+        else: 
+            raise ValueError("quality = '{quality}' not supported")
+        
+        idx_injection_first = int(np.round(num_inference_steps*deepth_strength))
+        idx_injection_last = num_inference_steps - 3
+        nmb_injections = int(np.floor(num_inference_steps/5)) - 1
+        
+        list_injection_idx = [0]
+        list_injection_idx.extend(np.linspace(idx_injection_first, idx_injection_last, nmb_injections).astype(int))
+        list_nmb_branches = np.round(np.logspace(np.log10(2), np.log10(nmb_branches_final), nmb_injections+1)).astype(int)
+        
+        # Cleanup. There should be at least 3 diffusion steps between each injection
+        list_injection_idx_clean = [list_injection_idx[0]]
+        list_nmb_branches_clean = [list_nmb_branches[0]]
+        idx_last_check = 0
+        for i in range(len(list_injection_idx)-1):
+            if list_injection_idx[i+1] - list_injection_idx_clean[idx_last_check] >= nmb_mindist:
+                list_injection_idx_clean.append(list_injection_idx[i+1])
+                list_nmb_branches_clean.append(list_nmb_branches[i+1])
+                idx_last_check +=1 
+        list_injection_idx_clean = [int(l) for l in list_injection_idx_clean]
+        list_nmb_branches_clean = [int(l) for l in list_nmb_branches_clean]
+        
+        list_injection_idx = list_injection_idx_clean
+        list_nmb_branches = list_nmb_branches_clean
+
+        print(f"num_inference_steps: {num_inference_steps}")
+        print(f"list_injection_idx: {list_injection_idx}")
+        print(f"list_nmb_branches: {list_nmb_branches}")
+        
+        self.num_inference_steps = num_inference_steps
+        self.list_injection_idx = list_injection_idx
+        self.list_nmb_branches = list_nmb_branches
+
+    
+    def setup_branching(self,
+                        num_inference_steps: int =30,
+                        list_nmb_branches: List[int] = None, 
+                        list_injection_strength: List[float] = None, 
+                        list_injection_idx: List[int] = None, 
+                        guidance_downscale: float = 1.0,
+                      ):
+            r""" 
+            Sets the branching structure for making transitions.
+            num_inference_steps: int
+                Number of diffusion steps. Larger values will take more compute time.
             list_nmb_branches: List[int]:
                 list of the number of branches for each injection.
             list_injection_strength: List[float]:
@@ -154,6 +224,51 @@ class LatentBlending():
             list_injection_idx: List[int]:
                 list of injection strengths within interval [0, 1), values need to be increasing.
                 Alternatively you can specify the list_injection_strength.
+            guidance_downscale: float = 1.0
+                reduces the guidance scale towards the middle of the transition
+            
+                
+            """
+            # Assert
+            assert guidance_downscale>0 and guidance_downscale<=1.0, "guidance_downscale neees to be in interval (0,1]"
+            assert not((list_injection_strength is not None) and (list_injection_idx is not None)), "suppyl either list_injection_strength or list_injection_idx"
+            
+            if list_injection_strength is None:
+                assert list_injection_idx is not None, "Supply either list_injection_idx or list_injection_strength"
+                assert isinstance(list_injection_idx[0], int) or isinstance(list_injection_idx[0], np.int) , "Need to supply integers for list_injection_idx"
+                
+            if list_injection_idx is None:
+                assert list_injection_strength is not None, "Supply either list_injection_idx or list_injection_strength"
+                # Create the injection indexes
+                list_injection_idx = [int(round(x*num_inference_steps)) for x in list_injection_strength]
+                assert min(np.diff(list_injection_idx)) > 0, 'Injection idx needs to be increasing'
+                if min(np.diff(list_injection_idx)) < 2:
+                    print("Warning: your injection spacing is very tight. consider increasing the distances")
+                assert isinstance(list_injection_strength[1], np.floating) or isinstance(list_injection_strength[1], float), "Need to supply floats for list_injection_strength"
+                # we are checking element 1 in list_injection_strength because "0" is an int... [0, 0.5]
+            
+            assert max(list_injection_idx) < num_inference_steps, "Decrease the injection index or strength"
+            assert len(list_injection_idx) == len(list_nmb_branches), "Need to have same length"
+            assert max(list_injection_idx) < num_inference_steps,"Injection index cannot happen after last diffusion step! Decrease list_injection_idx or list_injection_strength[-1]"
+                
+            
+            # Set attributes
+            self.num_inference_steps = num_inference_steps
+            self.sdh.num_inference_steps = num_inference_steps
+            self.list_nmb_branches = list_nmb_branches
+            self.list_injection_idx = list_injection_idx
+            
+           
+    
+    def run_transition(
+            self, 
+            recycle_img1: Optional[bool] = False, 
+            recycle_img2: Optional[bool] = False, 
+            fixed_seeds: Optional[List[int]] = None,
+        ):
+        r"""
+        Returns a list of transition images using spherical latent blending.
+        Args:
             recycle_img1: Optional[bool]:
                 Don't recompute the latents for the first keyframe (purely prompt1). Saves compute.
             recycle_img2: Optional[bool]:
@@ -166,25 +281,7 @@ class LatentBlending():
         # Sanity checks first
         assert self.text_embedding1 is not None, 'Set the first text embedding with .set_prompt1(...) before'
         assert self.text_embedding2 is not None, 'Set the second text embedding with .set_prompt2(...) before'
-        assert not((list_injection_strength is not None) and (list_injection_idx is not None)), "suppyl either list_injection_strength or list_injection_idx"
-        
-        if list_injection_strength is None:
-            assert list_injection_idx is not None, "Supply either list_injection_idx or list_injection_strength"
-            assert isinstance(list_injection_idx[0], int) or isinstance(list_injection_idx[0], np.int) , "Need to supply integers for list_injection_idx"
-            
-        if list_injection_idx is None:
-            assert list_injection_strength is not None, "Supply either list_injection_idx or list_injection_strength"
-            # Create the injection indexes
-            list_injection_idx = [int(round(x*self.num_inference_steps)) for x in list_injection_strength]
-            assert min(np.diff(list_injection_idx)) > 0, 'Injection idx needs to be increasing'
-            if min(np.diff(list_injection_idx)) < 2:
-                print("Warning: your injection spacing is very tight. consider increasing the distances")
-            assert isinstance(list_injection_strength[1], np.floating) or isinstance(list_injection_strength[1], float), "Need to supply floats for list_injection_strength"
-            # we are checking element 1 in list_injection_strength because "0" is an int... [0, 0.5]
-        
-        assert max(list_injection_idx) < self.num_inference_steps, "Decrease the injection index or strength"
-        assert len(list_injection_idx) == len(list_nmb_branches), "Need to have same length"
-        assert max(list_injection_idx) < self.num_inference_steps,"Injection index cannot happen after last diffusion step! Decrease list_injection_idx or list_injection_strength[-1]"
+        assert self.list_injection_idx is not None, 'Set the branching structure before, by calling autosetup_branching or setup_branching'
         
         if fixed_seeds is not None:
             if fixed_seeds == 'randomize':
@@ -204,21 +301,22 @@ class LatentBlending():
                 print("Warning. You want to recycle but there is nothing here. Disabling recycling.")
                 recycle_img1 = False
                 recycle_img2 = False
-            elif self.list_nmb_branches_prev != list_nmb_branches:
+            elif self.list_nmb_branches_prev != self.list_nmb_branches:
                 print("Warning. Cannot change list_nmb_branches if recycling latent. Disabling recycling.")
                 recycle_img1 = False
                 recycle_img2 = False
-            elif self.list_injection_idx_prev != list_injection_idx:
+            elif self.list_injection_idx_prev != self.list_injection_idx:
                 print("Warning. Cannot change list_nmb_branches if recycling latent. Disabling recycling.")
                 recycle_img1 = False
                 recycle_img2 = False
         
         # Make a backup for future reference
-        self.list_nmb_branches_prev = list_nmb_branches
-        self.list_injection_idx_prev = list_injection_idx
+        self.list_nmb_branches_prev = self.list_nmb_branches[:]
+        self.list_injection_idx_prev = self.list_injection_idx[:]
         
         # Auto inits
-        list_injection_idx_ext = list_injection_idx[:] 
+        list_injection_idx_ext = self.list_injection_idx[:] 
+        list_nmb_branches = self.list_nmb_branches[:] 
         list_injection_idx_ext.append(self.num_inference_steps)
         
         # If injection at depth 0 not specified, we will start out with 2 branches
@@ -291,7 +389,7 @@ class LatentBlending():
             
         # Diffusion computations start here
         time_start = time.time()
-        for t_block, idx_branch in tqdm(list_compute, desc="computing transition"):
+        for t_block, idx_branch in tqdm(list_compute, desc="computing transition", smoothing=-1):
             if self.stop_diffusion:
                 print("run_transition: process interrupted")
                 return self.tree_final_imgs
@@ -484,6 +582,7 @@ class LatentBlending():
         Set a the seed for a fresh start.
         """ 
         self.seed = seed
+        self.sdh.seed = seed
         
 
     def swap_forward(self):
@@ -703,76 +802,6 @@ def get_time(resolution=None):
         raise ValueError("bad resolution provided: %s" %resolution)
     return t
 
-def get_branching(
-        quality: str = 'medium',
-        deepth_strength: float = 0.65,
-        nmb_frames: int = 360,
-        nmb_mindist: int = 3,
-    ):
-    r"""
-    Helper function to set up the branching structure automatically.
-    
-    Args:
-        quality: str 
-            Determines how many diffusion steps are being made + how many branches in total.
-            Choose: fast, medium, high, ultra
-        deepth_strength: float = 0.65,
-            Determines how deep the first injection will happen. 
-            Deeper injections will cause (unwanted) formation of new structures,
-            more shallow values will go into alpha-blendy land.
-        nmb_frames: int = 360,
-            total number of frames
-        nmb_mindist: int = 3 
-            minimum distance in terms of diffusion iteratinos between subsequent injections
-
-    """ 
-#%% 
-    if quality == 'lowest':
-        num_inference_steps = 12
-        nmb_branches_final = 5
-    elif quality == 'low':
-        num_inference_steps = 15
-        nmb_branches_final = nmb_frames//16
-    elif quality == 'medium':
-        num_inference_steps = 30
-        nmb_branches_final = nmb_frames//8
-    elif quality == 'high':
-        num_inference_steps = 60
-        nmb_branches_final = nmb_frames//4
-    elif quality == 'ultra':
-        num_inference_steps = 100
-        nmb_branches_final = nmb_frames//2
-    else: 
-        raise ValueError("quality = '{quality}' not supported")
-    
-    idx_injection_first = int(np.round(num_inference_steps*deepth_strength))
-    idx_injection_last = num_inference_steps - 3
-    nmb_injections = int(np.floor(num_inference_steps/5)) - 1
-    
-    list_injection_idx = [0]
-    list_injection_idx.extend(np.linspace(idx_injection_first, idx_injection_last, nmb_injections).astype(int))
-    list_nmb_branches = np.round(np.logspace(np.log10(2), np.log10(nmb_branches_final), nmb_injections+1)).astype(int)
-    
-    # Cleanup. There should be at least 3 diffusion steps between each injection
-    list_injection_idx_clean = [list_injection_idx[0]]
-    list_nmb_branches_clean = [list_nmb_branches[0]]
-    idx_last_check = 0
-    for i in range(len(list_injection_idx)-1):
-        if list_injection_idx[i+1] - list_injection_idx_clean[idx_last_check] >= nmb_mindist:
-            list_injection_idx_clean.append(list_injection_idx[i+1])
-            list_nmb_branches_clean.append(list_nmb_branches[i+1])
-            idx_last_check +=1 
-    list_injection_idx_clean = [int(l) for l in list_injection_idx_clean]
-    list_nmb_branches_clean = [int(l) for l in list_nmb_branches_clean]
-    
-    list_injection_idx = list_injection_idx_clean
-    list_nmb_branches = list_nmb_branches_clean
-
-    print(f"num_inference_steps: {num_inference_steps}")
-    print(f"list_injection_idx: {list_injection_idx}")
-    print(f"list_nmb_branches: {list_nmb_branches}")
-    
-    return num_inference_steps, list_injection_idx, list_nmb_branches
 
 
 
@@ -786,6 +815,7 @@ if __name__ == "__main__":
 TODO Coding:
     RUNNING WITHOUT PROMPT!
     save value ranges, can it be trashed?
+    in the middle: have more branches + lower guidance scale
     
 TODO Other:
     github
