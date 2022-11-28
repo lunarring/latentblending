@@ -233,7 +233,6 @@ class LatentBlending():
                         list_nmb_branches: List[int] = None, 
                         list_injection_strength: List[float] = None, 
                         list_injection_idx: List[int] = None, 
-                        
                       ):
             r""" 
             Sets the branching structure for making transitions.
@@ -276,7 +275,6 @@ class LatentBlending():
             self.sdh.num_inference_steps = num_inference_steps
             self.list_nmb_branches = list_nmb_branches
             self.list_injection_idx = list_injection_idx
-            self.guidance_scale_mid_damper = guidance_scale_mid_damper
             
            
     
