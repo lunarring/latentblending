@@ -34,40 +34,32 @@ from stable_diffusion_holder import StableDiffusionHolder
 torch.set_grad_enabled(False)
 
 #%% First let us spawn a stable diffusion holder
-device = "cuda:0"
-num_inference_steps = 20 # Number of diffusion interations
+device = "cuda"
+quality = 'medium'
+deepth_strength = 0.65
 fp_ckpt= "../stable_diffusion_models/ckpt/512-inpainting-ema.ckpt"
 fp_config = '../stablediffusion/configs//stable-diffusion/v2-inpainting-inference.yaml'
 
-sdh = StableDiffusionHolder(fp_ckpt, fp_config, device, num_inference_steps=num_inference_steps)
+sdh = StableDiffusionHolder(fp_ckpt, fp_config, device)
 
 
 #%% Let's make a source image and mask.
-height = 512
-width = 512
-num_inference_steps = 30
-guidance_scale = 5
-fixed_seeds = [629575320, 670154945]
+seed0 = 190791709
 
 lb = LatentBlending(sdh)
-lb.autosetup_branching("low")
+lb.autosetup_branching(quality=quality, deepth_strength=deepth_strength)
 prompt1 = "photo of a futuristic alien temple in a desert, mystic, glowing, organic, intricate, sci-fi movie, mesmerizing, scary"
 lb.set_prompt1(prompt1)
 lb.init_inpainting(init_empty=True)
-lb.set_seed(fixed_seeds[0])
+lb.set_seed(seed0)
 image_source = lb.run_diffusion(lb.text_embedding1, return_image=True)
 mask_image = 255*np.ones([512,512], dtype=np.uint8)
-mask_image[160:250, 200:320] = 0
+mask_image[340:420, 170:280, ] = 0
 mask_image = Image.fromarray(mask_image)
 
 
 #%% Next let's set up all parameters
-# FIXME below fix numbers
-# We want 20 diffusion steps, begin with 2 branches, have 3 branches at step 12 (=0.6*20)
-# 10 branches at step 16 (=0.8*20) and 24 branches at step 18 (=0.9*20)
-# Furthermore we want seed 993621550 for keyframeA and seed 54878562 for keyframeB ()
-
-fixed_seeds = [993621550, 280335986]
+fixed_seeds = [seed0, 280335986]
     
 prompt1 = "photo of a futuristic alien temple in a desert, mystic, glowing, organic, intricate, sci-fi movie, mesmerizing, scary"
 prompt2 = "aerial photo of a futuristic alien temple in a coastal area, waves clashing"
