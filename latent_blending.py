@@ -454,9 +454,6 @@ class LatentBlending():
             self,
             list_prompts: List[str],
             list_seeds: List[int] = None,
-            list_nmb_branches: List[int] = None, 
-            list_injection_strength: List[float] = None, 
-            list_injection_idx: List[int] = None, 
             ms: MovieSaver = None,
             fps: float = 24,
             duration_single_trans: float = 15,
@@ -468,14 +465,6 @@ class LatentBlending():
                 list of the prompts. There will be a transition starting from the first to the last.
             list_seeds: List[int] = None: 
                 Random Seeds for each prompt.
-            list_nmb_branches: List[int]:
-                list of the number of branches for each injection.
-            list_injection_strength: List[float]:
-                list of injection strengths within interval [0, 1), values need to be increasing.
-                Alternatively you can direclty specify the list_injection_idx.
-            list_injection_idx: List[int]:
-                list of injection strengths within interval [0, 1), values need to be increasing.
-                Alternatively you can specify the list_injection_strength.
             ms: MovieSaver
                 You need to spawn a moviesaver instance.
             fps: float:
@@ -505,7 +494,7 @@ class LatentBlending():
                 recycle_img1 = True    
             
             local_seeds = [list_seeds[i], list_seeds[i+1]]
-            list_imgs = self.run_transition(list_nmb_branches, list_injection_strength=list_injection_strength, list_injection_idx=list_injection_idx, recycle_img1=recycle_img1, fixed_seeds=local_seeds)
+            list_imgs = self.run_transition(recycle_img1=recycle_img1, fixed_seeds=local_seeds)
             list_imgs_interp = add_frames_linear_interp(list_imgs, fps, duration_single_trans)
             
             # Save movie frame
