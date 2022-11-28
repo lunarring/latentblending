@@ -21,8 +21,6 @@ warnings.filterwarnings('ignore')
 import warnings
 import torch
 from tqdm.auto import tqdm
-from diffusers import StableDiffusionPipeline
-from diffusers.schedulers import DDIMScheduler
 from PIL import Image
 import matplotlib.pyplot as plt
 import torch
@@ -67,7 +65,7 @@ fps = 60
 imgs_transition_ext = add_frames_linear_interp(imgs_transition, duration_transition, fps)
 
 # movie saving
-fp_movie = "/home/lugo/tmp/latentblending/bobo_incoming.mp4"
+fp_movie = "movie_example1.mp4"
 if os.path.isfile(fp_movie):
     os.remove(fp_movie)
 ms = MovieSaver(fp_movie, fps=fps)

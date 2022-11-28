@@ -26,9 +26,6 @@ import subprocess
 import warnings
 import torch
 from tqdm.auto import tqdm
-from diffusers import StableDiffusionInpaintPipeline
-from diffusers import StableDiffusionPipeline
-from diffusers.schedulers import DDIMScheduler
 from PIL import Image
 import matplotlib.pyplot as plt
 import torch
@@ -41,6 +38,10 @@ torch.set_grad_enabled(False)
 from omegaconf import OmegaConf
 from torch import autocast
 from contextlib import nullcontext
+sys.path.append('../stablediffusion/ldm')
+from ldm.util import instantiate_from_config
+from ldm.models.diffusion.ddim import DDIMSampler
+from stable_diffusion_holder import StableDiffusionHolder
 #%% 
 class LatentBlending():
     def __init__(
@@ -163,8 +164,8 @@ class LatentBlending():
             
         """
         # Sanity checks first
-        assert self.text_embedding1 is not None, 'Set the first text embedding with .set_prompt1(...) first'
-        assert self.text_embedding2 is not None, 'Set the second text embedding with .set_prompt2(...) first'
+        assert self.text_embedding1 is not None, 'Set the first text embedding with .set_prompt1(...) before'
+        assert self.text_embedding2 is not None, 'Set the second text embedding with .set_prompt2(...) before'
         assert not((list_injection_strength is not None) and (list_injection_idx is not None)), "suppyl either list_injection_strength or list_injection_idx"
         
         if list_injection_strength is None:
@@ -366,11 +367,11 @@ class LatentBlending():
             
         """
         
-        # Ensure correct 
+        assert len(list_prompts) == len(list_seeds), "Supply the same number of prompts and seeds"
+        
         if list_seeds is None:
             list_seeds = list(np.random.randint(0, 10e10, len(list_prompts)))
             
-        assert len(list_prompts) == len(list_seeds), "Supply the same number of prompts and seeds"
         
         for i in range(len(list_prompts)-1):
             print(f"Starting movie segment {i+1}/{len(list_prompts)-1}")
@@ -487,7 +488,8 @@ class LatentBlending():
 
     def swap_forward(self):
         r"""
-        Moves over keyframe two -> keyframe one. Useful for making a sequence of transitions.
+        Moves over keyframe two -> keyframe one. Useful for making a sequence of transitions
+        as in run_multi_transition()
         """ 
         # Move over all latents
         for t_block in range(len(self.tree_latents)):
@@ -499,6 +501,7 @@ class LatentBlending():
         
         # Final cleanup for extra sanity
         self.tree_final_imgs = [] 
+        
         
 # Auxiliary functions
 def get_closest_idx(
@@ -721,7 +724,6 @@ def get_branching(
             total number of frames
         nmb_mindist: int = 3 
             minimum distance in terms of diffusion iteratinos between subsequent injections
-        
 
     """ 
 #%% 
@@ -767,144 +769,20 @@ def get_branching(
     print(f"list_injection_idx: {list_injection_idx_clean}")
     print(f"list_nmb_branches: {list_nmb_branches_clean}")
     
-    # return num_inference_steps, list_injection_idx_clean, list_nmb_branches_clean
+    return num_inference_steps, list_injection_idx_clean, list_nmb_branches_clean
 
 
 
 
 #%% le main
 if __name__ == "__main__":
-    sys.path.append('../stablediffusion/ldm')
-    from ldm.util import instantiate_from_config
-    from ldm.models.diffusion.ddim import DDIMSampler
-    from ldm.models.diffusion.dpm_solver import DPMSolverSampler
-    
-    num_inference_steps = 20 # Number of diffusion interations
-    sdh = StableDiffusionHolder(num_inference_steps)
-    # fp_ckpt = "../stable_diffusion_models/ckpt/768-v-ema.ckpt"
-    # fp_config = '../stablediffusion/configs/stable-diffusion/v2-inference-v.yaml'
-    
-    fp_ckpt= "../stable_diffusion_models/ckpt/512-base-ema.ckpt"
-    fp_config = '../stablediffusion/configs//stable-diffusion/v2-inference.yaml'
-    
-    sdh.init_model(fp_ckpt, fp_config)
-    
-    #%%
-    list_nmb_branches = [2, 3, 10, 24] # Branching structure: how many branches
-    list_injection_strength = [0.0, 0.6, 0.8, 0.9] # Branching structure: how deep is the blending
-    width = 512 
-    height = 512
-    guidance_scale = 5
-    fixed_seeds = [993621550, 280335986]
-    device = "cuda:0"
-    lb = LatentBlending(sdh, device, height, width, num_inference_steps, guidance_scale)
-    prompt1 = "photo of a forest covered in white flowers, ambient light, very detailed, magic"
-    prompt2 = "photo of an eerie statue surrounded by ferns and vines, analog photograph kodak portra, mystical ambience, incredible detail"
-    lb.set_prompt1(prompt1)
-    lb.set_prompt2(prompt2)
-    
-    lx = lb.run_transition(list_nmb_branches, list_injection_strength)
-    
-        
-        
-    
-    #%%
-    xxx 
-    device = "cuda:0"
-    model_path = "../stable_diffusion_models/stable-diffusion-v1-5"
-    
-    scheduler = DDIMScheduler(beta_start=0.00085,
-                beta_end=0.012,
-                beta_schedule="scaled_linear",
-                clip_sample=False,
-                set_alpha_to_one=False)
-                
-    pipe = StableDiffusionPipeline.from_Union[StableDiffusionInpaintPipeline, StableDiffusionPipeline],pretrained(
-        model_path,
-        revision="fp16", 
-        torch_dtype=torch.float16,
-        scheduler=scheduler,
-        use_auth_token=True
-    )
-    pipe = pipe.to(device)
-        
-    num_inference_steps = 20 # Number of diffusion interations
-    list_nmb_branches = [2, 3, 10, 24] # Branching structure: how many branches
-    list_injection_strength = [0.0, 0.6, 0.8, 0.9] # Branching structure: how deep is the blending
-    width = 512 
-    height = 512
-    guidance_scale = 5
-    fixed_seeds = [993621550, 280335986]
-        
-    lb = LatentBlending(pipe, device, height, width, num_inference_steps, guidance_scale)
-    lb.negative_prompt = 'text, letters'
-    prompt1 = "photo of a beautiful newspaper covered in white flowers, ambient light, very detailed, magic"
-    prompt2 = "photo of an eerie statue surrounded by ferns and vines, analog photograph kodak portra, mystical ambience, incredible detail"
-    lb.set_prompt1(prompt1)
-    lb.set_prompt2(prompt2)
-    
-    imgs_transition = lb.run_transition(list_nmb_branches, list_injection_strength, fixed_seeds=fixed_seeds)
-    
-    xxx
-
-#%%
-
-    num_inference_steps = 30 # Number of diffusion interations
-    list_nmb_branches = [2, 10, 50, 100, 200] #
-    list_injection_strength = list(np.linspace(0.5, 0.95, 4)) # Branching structure: how deep is the blending
-    list_injection_strength.insert(0, 0.0)
-    
-    width = 512
-    height = 512
-    guidance_scale = 5
-    fps = 30
-    duration_single_trans = 20
-    width = 512
-    height = 512
-    
-    lb = LatentBlending(pipe, device, height, width, num_inference_steps, guidance_scale)
-    
-    list_prompts = []
-    list_prompts.append("surrealistic statue made of glitter and dirt, standing in a lake, atmospheric light, strange glow")
-    list_prompts.append("statue of a mix between a tree and human, made of marble, incredibly detailed")
-    list_prompts.append("weird statue of a frog monkey, many colors, standing next to the ruins of an ancient city")
-    list_prompts.append("statue made of hot metal, bizzarre, dark clouds in the sky")
-    list_prompts.append("statue of a spider that looked like a human")
-    list_prompts.append("statue of a bird that looked like a scorpion")
-    list_prompts.append("statue of an ancient cybernetic messenger annoucing good news, golden, futuristic")
-    
-    
-    list_seeds = [234187386, 422209351, 241845736, 28652396, 783279867, 831049796, 234903931]
-    
-    fp_movie = "/home/lugo/tmp/latentblending/bubua.mp4"
-    ms = MovieSaver(fp_movie, fps=fps)
-    
-    lb.run_multi_transition(
-            list_prompts, 
-            list_seeds, 
-            list_nmb_branches, 
-            list_injection_strength=list_injection_strength, 
-            ms=ms, 
-            fps=fps, 
-            duration_single_trans=duration_single_trans
-        )
-
-#%% get good branching struct
-
-
-#%%
-
-
-
+    pass
 
 #%%
 """
 TODO Coding:
     RUNNING WITHOUT PROMPT!
-    
-    auto mode (quality settings)
     save value ranges, can it be trashed?
-    set all variables in init! self.img2...
     
 TODO Other:
     github
