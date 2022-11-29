@@ -52,21 +52,25 @@ prompt1 = "photo of a futuristic alien temple in a desert, mystic, glowing, orga
 lb.set_prompt1(prompt1)
 lb.init_inpainting(init_empty=True)
 lb.set_seed(seed0)
-image_source = lb.run_diffusion(lb.text_embedding1, return_image=True)
+list_latents = lb.run_diffusion(lb.text_embedding1)
+image_source = lb.sdh.latent2image(list_latents[-1])
+
 mask_image = 255*np.ones([512,512], dtype=np.uint8)
 mask_image[340:420, 170:280, ] = 0
 mask_image = Image.fromarray(mask_image)
 
 
 #%% Next let's set up all parameters
-fixed_seeds = [seed0, 280335986]
+lb.inject_latents(list_latents, inject_img1=True)
+
+fixed_seeds = [seed0, 6579436]
     
 prompt1 = "photo of a futuristic alien temple in a desert, mystic, glowing, organic, intricate, sci-fi movie, mesmerizing, scary"
-prompt2 = "aerial photo of a futuristic alien temple in a coastal area, waves clashing"
+prompt2 = "aerial photo of a futuristic alien temple in a blue coastal area, the sun is shining with a bright light"
 lb.set_prompt1(prompt1)
 lb.set_prompt2(prompt2)
 lb.init_inpainting(image_source, mask_image)
-imgs_transition = lb.run_transition(fixed_seeds=fixed_seeds)
+imgs_transition = lb.run_transition(recycle_img1=True, fixed_seeds=fixed_seeds)
 
 # let's get more cheap frames via linear interpolation
 duration_transition = 12
