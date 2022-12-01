@@ -35,7 +35,6 @@ torch.set_grad_enabled(False)
 
 #%% First let us spawn a stable diffusion holder
 device = "cuda"
-quality = 'medium'
 deepth_strength = 0.65
 fp_ckpt= "../stable_diffusion_models/ckpt/512-inpainting-ema.ckpt"
 fp_config = '../stablediffusion/configs//stable-diffusion/v2-inpainting-inference.yaml'
@@ -44,6 +43,7 @@ sdh = StableDiffusionHolder(fp_ckpt, fp_config, device)
 
 
 #%% Let's make a source image and mask.
+quality = 'low'
 seed0 = 190791709
 
 lb = LatentBlending(sdh)
@@ -56,7 +56,7 @@ list_latents = lb.run_diffusion(lb.text_embedding1)
 image_source = lb.sdh.latent2image(list_latents[-1])
 
 mask_image = 255*np.ones([512,512], dtype=np.uint8)
-mask_image[340:420, 170:280, ] = 0
+mask_image[340:420, 170:280] = 0
 mask_image = Image.fromarray(mask_image)
 
 
@@ -72,13 +72,13 @@ lb.set_prompt2(prompt2)
 lb.init_inpainting(image_source, mask_image)
 imgs_transition = lb.run_transition(recycle_img1=True, fixed_seeds=fixed_seeds)
 
-# let's get more cheap frames via linear interpolation
-duration_transition = 12
+#% let's get more cheap frames via linear interpolation
+duration_transition = 3
 fps = 60
 imgs_transition_ext = add_frames_linear_interp(imgs_transition, duration_transition, fps)
 
 # movie saving
-fp_movie = "movie_example2.mp4"
+fp_movie = "/home/lugo/git/latentblending/test.mp4"
 if os.path.isfile(fp_movie):
     os.remove(fp_movie)
 ms = MovieSaver(fp_movie, fps=fps, shape_hw=[lb.height, lb.width])
