@@ -17,40 +17,28 @@ Latent blending allows you to generate smooth video transitions between two prom
 # Installation
 #### Packages
 ```commandline
- pip install -r requirements.txt
+pip install -r requirements.txt
 ```
-#### Models
+#### Download Models from Huggingface
 [Download the Stable Diffusion 2.0 Standard Model](https://huggingface.co/stabilityai/stable-diffusion-2)
 
 [Download the Stable Diffusion 2.0 Inpainting Model (optional)](https://huggingface.co/stabilityai/stable-diffusion-2-inpainting)
 
-#### xformers efficient attention [(copied from stability)](https://github.com/Stability-AI/stablediffusion)
-For more efficiency and speed on GPUs, 
-we highly recommended installing the [xformers](https://github.com/facebookresearch/xformers)
-library.
-
-Tested on A100 with CUDA 11.4.
-Installation needs a somewhat recent version of nvcc and gcc/g++, obtain those, e.g., via 
-```commandline
-export CUDA_HOME=/usr/local/cuda-11.4
-conda install -c nvidia/label/cuda-11.4.0 cuda-nvcc
-conda install -c conda-forge gcc
-conda install -c conda-forge gxx_linux-64=9.5.0
-```
-
-Then, run the following (compiling takes up to 30 min).
+#### Install [Xformers](https://github.com/facebookresearch/xformers)
+With xformers, stable diffusion 2 will run much faster. The recommended way of installation is via the supplied binaries (Linux).
 
 ```commandline
-cd ..
-git clone https://github.com/facebookresearch/xformers.git
-cd xformers
-git submodule update --init --recursive
-pip install -r requirements.txt
-pip install -e .
-cd ../stable-diffusion
+conda install xformers -c xformers/label/dev
 ```
-Upon successful installation, the code will automatically default to [memory efficient attention](https://github.com/facebookresearch/xformers)
-for the self- and cross-attention layers in the U-Net and autoencoder.
+
+Alternatively, you can build it from source:
+```commandline
+# (Optional) Makes the build much faster
+pip install ninja
+# Set TORCH_CUDA_ARCH_LIST if running and building on different GPU types
+pip install -v -U git+https://github.com/facebookresearch/xformers.git@main#egg=xformers
+# (this can take dozens of minutes)
+```
 
 # How does it work
 ![](animation.gif)
