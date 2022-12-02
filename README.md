@@ -25,7 +25,7 @@ pip install -r requirements.txt
 [Download the Stable Diffusion 2.0 Inpainting Model (optional)](https://huggingface.co/stabilityai/stable-diffusion-2-inpainting)
 
 #### Install [Xformers](https://github.com/facebookresearch/xformers)
-With xformers, stable diffusion 2 will run much faster. The recommended way of installation is via the supplied binaries (Linux).
+With xformers, stable diffusion 2 will run a bit faster. The recommended way of installation is via the supplied binaries (Linux).
 
 ```commandline
 conda install xformers -c xformers/label/dev
