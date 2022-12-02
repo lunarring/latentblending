@@ -31,7 +31,7 @@ from stable_diffusion_holder import StableDiffusionHolder
 torch.set_grad_enabled(False)
 
 #%% First let us spawn a stable diffusion holder
-device = "cuda:0"
+device = "cuda:0" 
 fp_ckpt = "../stable_diffusion_models/ckpt/768-v-ema.ckpt"
 fp_config = '../stablediffusion/configs/stable-diffusion/v2-inference-v.yaml'
 

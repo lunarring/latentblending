@@ -14,8 +14,8 @@
 
 import os, sys
 dp_git = "/home/lugo/git/"
-sys.path.append(os.path.join(dp_git,'garden4'))
 sys.path.append('util')
+# sys.path.append('../stablediffusion/ldm')
 import torch
 torch.backends.cudnn.benchmark = False
 import numpy as np
@@ -38,9 +38,9 @@ torch.set_grad_enabled(False)
 from omegaconf import OmegaConf
 from torch import autocast
 from contextlib import nullcontext
-sys.path.append('../stablediffusion/ldm')
-from ldm.util import instantiate_from_config
+
 from ldm.models.diffusion.ddim import DDIMSampler
+from ldm.util import instantiate_from_config
 from stable_diffusion_holder import StableDiffusionHolder
 #%% 
 class LatentBlending():
