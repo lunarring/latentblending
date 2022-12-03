@@ -91,6 +91,7 @@ nbclient @ file:///tmp/build/80754af9/nbclient_1650290238894/work
 nbconvert @ file:///croot/nbconvert_1668450669124/work
 nbformat @ file:///opt/conda/conda-bld/nbformat_1663744952973/work
 nest-asyncio @ file:///tmp/build/80754af9/nest-asyncio_1649830051683/work
+ninja==1.11.1
 numpy @ file:///croot/numpy_and_numpy_base_1668593735768/work
 numpydoc @ file:///croot/numpydoc_1668085905352/work
 nvidia-cublas-cu11==11.10.3.66
@@ -180,9 +181,10 @@ tokenizers==0.13.2
 toml @ file:///tmp/build/80754af9/toml_1616166611790/work
 tomli @ file:///opt/conda/conda-bld/tomli_1657175507142/work
 tomlkit @ file:///tmp/abs_56_0lnnq5x/croots/recipe/tomlkit_1658946880479/work
-torch==1.13.0
+torch==1.13.0+cu116
+torchaudio==0.13.0
 torchmetrics==0.11.0
-torchvision==0.14.0
+torchvision==0.14.0+cu116
 tornado @ file:///opt/conda/conda-bld/tornado_1662061693373/work
 tqdm==4.64.1
 traitlets @ file:///tmp/build/80754af9/traitlets_1636710298902/work
@@ -199,7 +201,7 @@ Werkzeug==2.2.2
 whatthepatch @ file:///opt/conda/conda-bld/whatthepatch_1661795988879/work
 wrapt @ file:///tmp/abs_c335821b-6e43-4504-9816-b1a52d3d3e1eel6uae8l/croots/recipe/wrapt_1657814400492/work
 wurlitzer @ file:///home/builder/ci_310/wurlitzer_1640796026694/work
-xformers==0.0.15.dev343+git.1b1fd8a
+xformers @ git+https://github.com/facebookresearch/xformers.git@4c06c79095ba8073dc870ee820e36a83302ae30c
 yapf @ file:///tmp/build/80754af9/yapf_1615749224965/work
 yarl==1.8.1
 zipp @ file:///opt/conda/conda-bld/zipp_1652341764480/work
