@@ -43,23 +43,26 @@ quality = 'medium'
 deepth_strength = 0.65
 fixed_seeds = [69731932, 504430820]
     
-prompt1 = "photo of a beautiful forest covered in white flowers, ambient light, very detailed, magic"
+prompt1 = "photo of a beautiful cherry forest covered in white flowers, ambient light, very detailed, magic"
 prompt2 = "photo of an golden statue with a funny hat, surrounded by ferns and vines, grainy analog photograph, mystical ambience, incredible detail"
 
+duration_transition = 12 # In seconds
+fps = 30
+
+# Spawn latent blending
 lb = LatentBlending(sdh)
 lb.autosetup_branching(quality=quality, deepth_strength=deepth_strength)
 lb.set_prompt1(prompt1)
 lb.set_prompt2(prompt2)
 
-
+# Run latent blending
 imgs_transition = lb.run_transition(fixed_seeds=fixed_seeds)
 
-# let's get more cheap frames via linear interpolation
-duration_transition = 12
-fps = 60
+
+# Let's get more cheap frames via linear interpolation (duration_transition*fps frames)
 imgs_transition_ext = add_frames_linear_interp(imgs_transition, duration_transition, fps)
 
-# movie saving
+# Save as MP4
 fp_movie = "movie_example1.mp4"
 if os.path.isfile(fp_movie):
     os.remove(fp_movie)
