@@ -35,23 +35,27 @@ torch.set_grad_enabled(False)
 
 #%% First let us spawn a stable diffusion holder
 device = "cuda"
-deepth_strength = 0.65
 fp_ckpt= "../stable_diffusion_models/ckpt/512-inpainting-ema.ckpt"
 fp_config = '../stablediffusion/configs//stable-diffusion/v2-inpainting-inference.yaml'
-
 sdh = StableDiffusionHolder(fp_ckpt, fp_config, device)
 
 
-#%% Let's make a source image and mask.
-quality = 'low'
+#%% Let's first make a source image and mask.
+quality = 'medium'
+deepth_strength = 0.65 #Specifies how deep (in terms of diffusion iterations the first branching happens)
+duration_transition = 7 # In seconds
+fps = 30
 seed0 = 190791709
 
+# Spawn latent blending
 lb = LatentBlending(sdh)
 lb.autosetup_branching(quality=quality, deepth_strength=deepth_strength)
 prompt1 = "photo of a futuristic alien temple in a desert, mystic, glowing, organic, intricate, sci-fi movie, mesmerizing, scary"
 lb.set_prompt1(prompt1)
 lb.init_inpainting(init_empty=True)
 lb.set_seed(seed0)
+
+# Run diffusion 
 list_latents = lb.run_diffusion(lb.text_embedding1)
 image_source = lb.sdh.latent2image(list_latents[-1])
 
@@ -60,25 +64,27 @@ mask_image[340:420, 170:280] = 0
 mask_image = Image.fromarray(mask_image)
 
 
-#%% Next let's set up all parameters
+#%% Now let us compute a transition video with inpainting
+# First inject back the latents that we already computed for our source image.
 lb.inject_latents(list_latents, inject_img1=True)
 
+# Then setup the seeds. Keep the one from the first image
 fixed_seeds = [seed0, 6579436]
-    
-prompt1 = "photo of a futuristic alien temple in a desert, mystic, glowing, organic, intricate, sci-fi movie, mesmerizing, scary"
+
+# Fix the prompts for the target    
 prompt2 = "aerial photo of a futuristic alien temple in a blue coastal area, the sun is shining with a bright light"
 lb.set_prompt1(prompt1)
 lb.set_prompt2(prompt2)
 lb.init_inpainting(image_source, mask_image)
+
+# Run latent blending
 imgs_transition = lb.run_transition(recycle_img1=True, fixed_seeds=fixed_seeds)
 
-#% let's get more cheap frames via linear interpolation
-duration_transition = 3
-fps = 60
+# Let's get more cheap frames via linear interpolation (duration_transition*fps frames)
 imgs_transition_ext = add_frames_linear_interp(imgs_transition, duration_transition, fps)
 
-# movie saving
-fp_movie = "/home/lugo/git/latentblending/test.mp4"
+# Save as MP4
+fp_movie = "movie_example2.mp4"
 if os.path.isfile(fp_movie):
     os.remove(fp_movie)
 ms = MovieSaver(fp_movie, fps=fps, shape_hw=[lb.height, lb.width])

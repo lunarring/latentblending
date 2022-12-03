@@ -40,7 +40,7 @@ sdh = StableDiffusionHolder(fp_ckpt, fp_config, device)
     
 #%% Next let's set up all parameters
 quality = 'medium'
-deepth_strength = 0.65
+deepth_strength = 0.65 # Specifies how deep (in terms of diffusion iterations the first branching happens)
 fixed_seeds = [69731932, 504430820]
     
 prompt1 = "photo of a beautiful cherry forest covered in white flowers, ambient light, very detailed, magic"

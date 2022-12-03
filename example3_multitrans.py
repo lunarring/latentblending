@@ -31,20 +31,19 @@ from stable_diffusion_holder import StableDiffusionHolder
 torch.set_grad_enabled(False)
 
 #%% First let us spawn a stable diffusion holder
-device = "cuda:0"
+device = "cuda"
 fp_ckpt = "../stable_diffusion_models/ckpt/768-v-ema.ckpt"
 fp_config = '../stablediffusion/configs/stable-diffusion/v2-inference-v.yaml'
 sdh = StableDiffusionHolder(fp_ckpt, fp_config, device)
 
     
-#%% MULTITRANS
+#%% Let's setup the multi transition
 fps = 30
 duration_single_trans = 15
-quality = 'high'
-deepth_strength = 0.55
-lb = LatentBlending(sdh)
-lb.autosetup_branching(quality=quality, deepth_strength=deepth_strength)
+quality = 'medium'
+deepth_strength = 0.55 #Specifies how deep (in terms of diffusion iterations the first branching happens)
 
+# Specify a list of prompts below
 list_prompts = []
 list_prompts.append("surrealistic statue made of glitter and dirt, standing in a lake, atmospheric light, strange glow")
 list_prompts.append("statue of a mix between a tree and human, made of marble, incredibly detailed")
@@ -53,9 +52,14 @@ list_prompts.append("statue of a spider that looked like a human")
 list_prompts.append("statue of a bird that looked like a scorpion")
 list_prompts.append("statue of an ancient cybernetic messenger annoucing good news, golden, futuristic")
 
+# You can optionally specify the seeds
 list_seeds = [954375479, 332539350, 956051013, 408831845, 250009012, 675588737]
 
+lb = LatentBlending(sdh)
+lb.autosetup_branching(quality=quality, deepth_strength=deepth_strength)
+
 fp_movie = "movie_example3.mp4"
+
 ms = MovieSaver(fp_movie, fps=fps)
 
 lb.run_multi_transition(
