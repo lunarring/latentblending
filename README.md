@@ -1,6 +1,6 @@
 # What is latent blending?
 
-Latent blending allows you to generate smooth video transitions between two prompts. It is based on [stable diffusion 2.0](https://stability.ai/blog/stable-diffusion-v2-release) and remixes the latent reprensetation using spherical linear interpolations. This results in imperceptible transitions, where one image slowly turns into another one. 
+Latent blending allows you to generate smooth video transitions between two prompts. It is based on [stable diffusion 2.1](https://stability.ai/blog/stablediffusion2-1-release7-dec-2022) and remixes the latent reprensetation using spherical linear interpolations. This results in imperceptible transitions, where one image slowly turns into another one. 
 
 # Example 1: simple transition
 (mp4), code
@@ -20,11 +20,11 @@ Latent blending allows you to generate smooth video transitions between two prom
 pip install -r requirements.txt
 ```
 #### Download Models from Huggingface
-[Download the Stable Diffusion 2.0 Standard Model](https://huggingface.co/stabilityai/stable-diffusion-2)
+[Download the Stable Diffusion v2-1_768 Model](https://huggingface.co/stabilityai/stable-diffusion-2-1)
 
 [Download the Stable Diffusion 2.0 Inpainting Model (optional)](https://huggingface.co/stabilityai/stable-diffusion-2-inpainting)
 
-#### Install [Xformers](https://github.com/facebookresearch/xformers)
+#### (Optional) Install [Xformers](https://github.com/facebookresearch/xformers)
 With xformers, stable diffusion 2 will run a bit faster. The recommended way of installation is via the supplied binaries (Linux).
 
 ```commandline
