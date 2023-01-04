@@ -166,7 +166,7 @@ def concatenate_movies(fp_final: str, list_fp_movies: List[str]):
     list_fp_movies : list[str]
         List of full paths of movie segments. 
     """
-    assert fp_final.endswith(".mp4"), "fp_final should end with .mp4"
+    assert fp_final[-4] == ".", "fp_final seems to miss file extension: {fp_final}"
     for fp in list_fp_movies:
         assert os.path.isfile(fp), f"Input movie does not exist: {fp}"
         assert os.path.getsize(fp) > 100, f"Input movie seems empty: {fp}"
@@ -218,7 +218,7 @@ if __name__ == "__main__":
     fps=2
     list_fp_movies = []
     for k in range(4):
-        fp_movie = f"/tmp/my_random_movie_{k}.mp4"
+        fp_movie = f"/tmp/my_random_movie_{k}.mkv"
         list_fp_movies.append(fp_movie)
         ms = MovieSaver(fp_movie, fps=fps)
         for fn in tqdm(range(30)):
@@ -226,6 +226,6 @@ if __name__ == "__main__":
             ms.write_frame(img)
         ms.finalize()
     
-    fp_final = "/tmp/my_concatenated_movie.mp4"
+    fp_final = "/tmp/my_concatenated_movie.mkv"
     concatenate_movies(fp_final, list_fp_movies)
 
