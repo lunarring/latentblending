@@ -22,7 +22,7 @@ import warnings
 import torch
 from tqdm.auto import tqdm
 from PIL import Image
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import torch
 from movie_util import MovieSaver
 from typing import Callable, List, Optional, Union
@@ -40,7 +40,7 @@ sdh = StableDiffusionHolder(fp_ckpt, fp_config, device)
     
 #%% Next let's set up all parameters
 quality = 'medium'
-deepth_strength = 0.65 # Specifies how deep (in terms of diffusion iterations the first branching happens)
+depth_strength = 0.65 # Specifies how deep (in terms of diffusion iterations the first branching happens)
 fixed_seeds = [69731932, 504430820]
     
 prompt1 = "photo of a beautiful cherry forest covered in white flowers, ambient light, very detailed, magic"
@@ -51,13 +51,12 @@ fps = 30
 
 # Spawn latent blending
 lb = LatentBlending(sdh)
-lb.autosetup_branching(quality=quality, deepth_strength=deepth_strength)
+lb.autosetup_branching(quality=quality, depth_strength=depth_strength)
 lb.set_prompt1(prompt1)
 lb.set_prompt2(prompt2)
 
 # Run latent blending
 imgs_transition = lb.run_transition(fixed_seeds=fixed_seeds)
-
 
 # Let's get more cheap frames via linear interpolation (duration_transition*fps frames)
 imgs_transition_ext = add_frames_linear_interp(imgs_transition, duration_transition, fps)

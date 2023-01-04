@@ -41,7 +41,7 @@ sdh = StableDiffusionHolder(fp_ckpt, fp_config, device)
 fps = 30
 duration_single_trans = 15
 quality = 'medium'
-deepth_strength = 0.55 #Specifies how deep (in terms of diffusion iterations the first branching happens)
+depth_strength = 0.55 #Specifies how deep (in terms of diffusion iterations the first branching happens)
 
 # Specify a list of prompts below
 list_prompts = []
@@ -56,7 +56,7 @@ list_prompts.append("statue of an ancient cybernetic messenger annoucing good ne
 list_seeds = [954375479, 332539350, 956051013, 408831845, 250009012, 675588737]
 
 lb = LatentBlending(sdh)
-lb.autosetup_branching(quality=quality, deepth_strength=deepth_strength)
+lb.autosetup_branching(quality=quality, depth_strength=depth_strength)
 
 fp_movie = "movie_example3.mp4"
 

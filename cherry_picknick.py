@@ -80,7 +80,7 @@ for i in range(10):
 # seed0 = 629575320
 
     lb = LatentBlending(sdh)
-    lb.autosetup_branching(quality='medium', deepth_strength=0.65)
+    lb.autosetup_branching(quality='medium', depth_strength=0.65)
     
     prompt1 = "photo of a futuristic alien temple in a desert, mystic, glowing, organic, intricate, sci-fi movie, mesmerizing, scary"
     lb.set_prompt1(prompt1)
