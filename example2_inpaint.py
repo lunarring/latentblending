@@ -25,7 +25,6 @@ import torch
 from tqdm.auto import tqdm
 from diffusers import StableDiffusionInpaintPipeline
 from PIL import Image
-import matplotlib.pyplot as plt
 import torch
 from movie_util import MovieSaver
 from typing import Callable, List, Optional, Union
@@ -42,21 +41,21 @@ sdh = StableDiffusionHolder(fp_ckpt, fp_config, device)
 
 #%% Let's first make a source image and mask.
 quality = 'medium'
-deepth_strength = 0.65 #Specifies how deep (in terms of diffusion iterations the first branching happens)
+depth_strength = 0.65 #Specifies how deep (in terms of diffusion iterations the first branching happens)
 duration_transition = 7 # In seconds
 fps = 30
 seed0 = 190791709
 
 # Spawn latent blending
 lb = LatentBlending(sdh)
-lb.autosetup_branching(quality=quality, deepth_strength=deepth_strength)
+lb.load_branching_profile(quality=quality, depth_strength=depth_strength)
 prompt1 = "photo of a futuristic alien temple in a desert, mystic, glowing, organic, intricate, sci-fi movie, mesmerizing, scary"
 lb.set_prompt1(prompt1)
 lb.init_inpainting(init_empty=True)
 lb.set_seed(seed0)
 
 # Run diffusion 
-list_latents = lb.run_diffusion(lb.text_embedding1)
+list_latents = lb.run_diffusion([lb.text_embedding1])
 image_source = lb.sdh.latent2image(list_latents[-1])
 
 mask_image = 255*np.ones([512,512], dtype=np.uint8)

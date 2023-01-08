@@ -22,7 +22,6 @@ import warnings
 import torch
 from tqdm.auto import tqdm
 from PIL import Image
-import matplotlib.pyplot as plt
 import torch
 from movie_util import MovieSaver
 from typing import Callable, List, Optional, Union
@@ -32,8 +31,8 @@ torch.set_grad_enabled(False)
 
 #%% First let us spawn a stable diffusion holder
 device = "cuda"
-fp_ckpt = "../stable_diffusion_models/ckpt/768-v-ema.ckpt"
-fp_config = '../stablediffusion/configs/stable-diffusion/v2-inference-v.yaml'
+fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_768-ema-pruned.ckpt"
+fp_config = 'configs/v2-inference-v.yaml'
 sdh = StableDiffusionHolder(fp_ckpt, fp_config, device)
 
     
@@ -56,16 +55,14 @@ list_prompts.append("statue of an ancient cybernetic messenger annoucing good ne
 list_seeds = [954375479, 332539350, 956051013, 408831845, 250009012, 675588737]
 
 lb = LatentBlending(sdh)
-lb.autosetup_branching(quality=quality, depth_strength=depth_strength)
+lb.load_branching_profile(quality=quality, depth_strength=depth_strength)
 
 fp_movie = "movie_example3.mp4"
 
-ms = MovieSaver(fp_movie, fps=fps)
-
 lb.run_multi_transition(
+        fp_movie, 
         list_prompts, 
         list_seeds, 
-        ms=ms, 
         fps=fps, 
         duration_single_trans=duration_single_trans
     )
