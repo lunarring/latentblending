@@ -222,7 +222,7 @@ class LatentBlending():
             nmb_branches_final = 12
         elif quality == 'upscaling_step2':
             num_inference_steps = 100
-            nmb_branches_final = 4
+            nmb_branches_final = 6
         else: 
             raise ValueError(f"quality = '{quality}' not supported")
             
@@ -253,22 +253,23 @@ class LatentBlending():
         """
         
         idx_injection_first = int(np.round(num_inference_steps*depth_strength))
-        idx_injection_last = num_inference_steps - 3
+        idx_injection_last = num_inference_steps - nmb_mindist
         nmb_injections = int(np.floor(num_inference_steps/5)) - 1
         
         list_injection_idx = [0]
         list_injection_idx.extend(np.linspace(idx_injection_first, idx_injection_last, nmb_injections).astype(int))
         list_nmb_branches = np.round(np.logspace(np.log10(2), np.log10(nmb_branches_final), nmb_injections+1)).astype(int)
         
-        # Cleanup. There should be at least 3 diffusion steps between each injection
+        # Cleanup. There should be at least nmb_mindist diffusion steps between each injection and list_nmb_branches increases
         list_injection_idx_clean = [list_injection_idx[0]]
         list_nmb_branches_clean = [list_nmb_branches[0]]
-        idx_last_check = 0
-        for i in range(len(list_injection_idx)-1):
-            if list_injection_idx[i+1] - list_injection_idx_clean[idx_last_check] >= nmb_mindist:
-                list_injection_idx_clean.append(list_injection_idx[i+1])
-                list_nmb_branches_clean.append(list_nmb_branches[i+1])
-                idx_last_check +=1 
+        for idx in range(1, len(list_injection_idx)):
+            if list_injection_idx[idx] - list_injection_idx[idx-1] >= nmb_mindist and list_nmb_branches[idx] > list_nmb_branches[idx-1]:
+                list_injection_idx_clean.append(list_injection_idx[idx])
+                list_nmb_branches_clean.append(list_nmb_branches[idx])
+                
+
+                
         list_injection_idx_clean = [int(l) for l in list_injection_idx_clean]
         list_nmb_branches_clean = [int(l) for l in list_nmb_branches_clean]
         
@@ -277,6 +278,7 @@ class LatentBlending():
 
         list_nmb_branches = list_nmb_branches
         list_injection_idx = list_injection_idx
+        print(f"autosetup_branching: num_inference_steps: {num_inference_steps} list_nmb_branches: {list_nmb_branches} list_injection_idx: {list_injection_idx}")
         self.setup_branching(num_inference_steps, list_nmb_branches=list_nmb_branches, list_injection_idx=list_injection_idx)
 
     
@@ -637,7 +639,7 @@ class LatentBlending():
             fixed_seeds = list(np.random.randint(0, 1000000, 2).astype(np.int32))
 
         # Run latent blending
-        self.autosetup_branching(quality='upscaling_step1', depth_strength=depth_strength)
+        self.load_branching_profile(quality='upscaling_step1', depth_strength=depth_strength)
         imgs_transition = self.run_transition(fixed_seeds=fixed_seeds)
         
         self.write_imgs_transition(dp_img, imgs_transition)
@@ -650,9 +652,8 @@ class LatentBlending():
             self, 
             dp_img: str,
             quality: str = 'upscaling_step2',
-            depth_strength: float = 0.65,
+            depth_strength: float = 0.6,
             fixed_seeds: Optional[List[int]] = None,
-            overwrite_folder: bool = False,
             ):
         
         fp_yml = os.path.join(dp_img, "lowres.yaml")
@@ -677,7 +678,7 @@ class LatentBlending():
         text_embeddingA = self.sdh.get_text_embedding(prompt1)
         text_embeddingB = self.sdh.get_text_embedding(prompt2)
         
-        self.autosetup_branching(quality='upscaling_step2', depth_strength=depth_strength)
+        self.load_branching_profile(quality='upscaling_step2', depth_strength=depth_strength)
         
         # list_nmb_branches = [2, 3, 4]
         # list_injection_strength = [0.0, 0.6, 0.95]
@@ -1083,98 +1084,18 @@ def yml_save(fp_yml, dict_stuff):
 #%% le main
 if __name__ == "__main__":
     # xxxx
-    # #%% First let us spawn a stable diffusion holder
-    # device = "cuda:0" 
-    # fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_512-ema-pruned.ckpt" 
-    # fp_config = 'configs/v2-inference.yaml'
-    # sdh = StableDiffusionHolder(fp_ckpt, fp_config, device, height=384, width=512)
-    # #%%    
-    # # Spawn latent blending
-    # self = LatentBlending(sdh)
-    
-    # dp_img = '/home/lugo/latentblending/test5'
-    
-    # fn1 = '230105_211545_photo_of_a_pyroclastic_ash_cloud_racing_down_mount_etna.txt'
-    # fn2 = '230105_211815_a_breathtaking_drone_photo_of_a_bizarre_cliff_structure,_lava_streams_flowing_down_into_the_ocean.txt'
-    
-    # dp_cherries ='/home/lugo/latentblending/cherries/'
-    
-    # dict1 = yml_load(os.path.join(dp_cherries, fn1))
-    # dict2 = yml_load(os.path.join(dp_cherries, fn2))
-    
-    # # prompt1 = "painting of a big pine tree"
-    # # prompt2 = "painting of the full moon shining, mountains in the background, rocks, eery"
-    # prompt1 = dict1['prompt']
-    # prompt2 = dict2['prompt']
-    # self.set_prompt1(prompt1)
-    # self.set_prompt2(prompt2)
-    # fixed_seeds = [dict1['seed'], dict2['seed']]
-    # self.run_upscaling_step1(dp_img, fixed_seeds=fixed_seeds, depth_strength=0.6)
-    
-    # # FIXME: depth_strength=0.6 CAN cause trouble. why?!
+
     
     #%% RUN UPSCALING_STEP2 (highres)
 
     fp_ckpt= "../stable_diffusion_models/ckpt/x4-upscaler-ema.ckpt"
     fp_config = 'configs/x4-upscaling.yaml'
     sdh = StableDiffusionHolder(fp_ckpt, fp_config)
-    # self.run_upscaling_step2(dp_img)
     #%% /home/lugo/latentblending/230106_210812   /
     self = LatentBlending(sdh) 
-    dp_img = '/home/lugo/latentblending/230107_144533'
-    fp_yml = os.path.join(dp_img, "lowres.yaml")
-    fp_movie = os.path.join(dp_img, "movie.mp4")
-    fps = 24
-    ms = MovieSaver(fp_movie, fps=fps)
-    assert os.path.isfile(fp_yml), "lowres.yaml does not exist. did you forget run_upscaling_step1?"
-    dict_stuff = yml_load(fp_yml)
-    
-    # load lowres images
-    nmb_images_lowres = dict_stuff['nmb_images']
-    prompt1 = dict_stuff['prompt1']
-    prompt2 = dict_stuff['prompt2']
-    imgs_lowres = []
-    for i in range(nmb_images_lowres):
-        fp_img_lowres = os.path.join(dp_img, f"lowres_img_{str(i).zfill(4)}.jpg")
-        assert os.path.isfile(fp_img_lowres), f"{fp_img_lowres} does not exist. did you forget run_upscaling_step1?"
-        imgs_lowres.append(Image.open(fp_img_lowres))
-    
+    dp_img = "/home/lugo/latentblending/230107_144533" 
+    self.run_upscaling_step2(dp_img)
 
-    # set up upscaling
-    text_embeddingA = self.sdh.get_text_embedding(prompt1)
-    text_embeddingB = self.sdh.get_text_embedding(prompt2)
-    
-    list_nmb_branches = [2, 3, 6]
-    list_injection_strength = [0.0, 0.6, 0.95]
-    num_inference_steps = 100
-    duration_single_trans = 3
-    self.setup_branching(num_inference_steps, list_nmb_branches, list_injection_strength)
-    list_fract_mixing = np.linspace(0, 1, nmb_images_lowres-1)
-    
-    for i in range(nmb_images_lowres-1):
-        print(f"Starting movie segment {i+1}/{nmb_images_lowres-1}")
-        
-        self.text_embedding1 = interpolate_linear(text_embeddingA, text_embeddingB, list_fract_mixing[i])
-        self.text_embedding2 = interpolate_linear(text_embeddingA, text_embeddingB, 1-list_fract_mixing[i])
-        
-        if i==0:
-            recycle_img1 = False    
-        else:
-            self.swap_forward()
-            recycle_img1 = True    
-        
-        self.set_image1(imgs_lowres[i])
-        self.set_image2(imgs_lowres[i+1])
-        list_imgs = self.run_transition(recycle_img1=recycle_img1)
-        self.write_imgs_transition(os.path.join(dp_img, f"highres_{str(i).zfill(4)}"), list_imgs)
-        list_imgs_interp = add_frames_linear_interp(list_imgs, fps, duration_single_trans)
-        
-        # Save movie frame
-        for img in list_imgs_interp:
-            ms.write_frame(img)
-            
-    ms.finalize()
- 
 #%%
 """
 
