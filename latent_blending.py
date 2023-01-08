@@ -268,14 +268,14 @@ class LatentBlending():
         list_nmb_branches = np.round(np.logspace(np.log10(2), np.log10(nmb_branches_final), nmb_injections+1)).astype(int)
         
         # Cleanup. There should be at least nmb_mindist diffusion steps between each injection and list_nmb_branches increases
-        list_injection_idx_clean = [list_injection_idx[0]]
         list_nmb_branches_clean = [list_nmb_branches[0]]
-        for idx in range(1, len(list_injection_idx)):
-            if list_injection_idx[idx] - list_injection_idx[idx-1] >= nmb_mindist and list_nmb_branches[idx] > list_nmb_branches[idx-1]:
-                list_injection_idx_clean.append(list_injection_idx[idx])
-                list_nmb_branches_clean.append(list_nmb_branches[idx])
-                
-
+        list_injection_idx_clean = [list_injection_idx[0]]
+        for idx_injection, nmb_branches in zip(list_injection_idx[1:], list_nmb_branches[1:]):
+            if idx_injection - list_injection_idx_clean[-1] >= nmb_mindist and nmb_branches > list_nmb_branches_clean[-1]:
+                list_nmb_branches_clean.append(nmb_branches)
+                list_injection_idx_clean.append(idx_injection)
+        list_nmb_branches_clean[-1] = nmb_branches_final
+        
                 
         list_injection_idx_clean = [int(l) for l in list_injection_idx_clean]
         list_nmb_branches_clean = [int(l) for l in list_nmb_branches_clean]
