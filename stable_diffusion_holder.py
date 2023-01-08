@@ -144,6 +144,8 @@ class StableDiffusionHolder:
         self.mask_empty = Image.fromarray(255*np.ones([self.width, self.height], dtype=np.uint8))
         self.image_empty = Image.fromarray(np.zeros([self.width, self.height, 3], dtype=np.uint8))
         
+        self.negative_prompt = [""]
+        
         
     def init_model(self, fp_ckpt, fp_config):
         assert os.path.isfile(fp_ckpt), f"Your model checkpoint file does not exist: {fp_ckpt}"
@@ -158,7 +160,17 @@ class StableDiffusionHolder:
         self.model = self.model.to(self.device)
         self.sampler = DDIMSampler(self.model)
         
+    def set_negative_prompt(self, negative_prompt):
+        r"""Set the negative prompt. Currenty only one negative prompt is supported
+        """
 
+        if isinstance(negative_prompt, str):
+            self.negative_prompt = [negative_prompt]
+        else:
+            self.negative_prompt = negative_prompt
+        
+        if len(self.negative_prompt) > 1:
+            self.negative_prompt = [self.negative_prompt[0]]
             
     def init_auto_res(self):
         r"""Automatically set the resolution to the one used in training.
@@ -266,7 +278,7 @@ class StableDiffusionHolder:
         with precision_scope("cuda"):
             with self.model.ema_scope():
                 if self.guidance_scale != 1.0:
-                    uc = self.model.get_learned_conditioning([""])
+                    uc = self.model.get_learned_conditioning(self.negative_prompt)
                 else:
                     uc = None
                 shape_latents = [self.C, self.height // self.f, self.width // self.f]
@@ -532,177 +544,28 @@ class StableDiffusionHolder:
 if __name__ == "__main__":
     
             
-    fp_ckpt= "../stable_diffusion_models/ckpt/x4-upscaler-ema.ckpt"
-    fp_config = 'configs/x4-upscaling.yaml'
-    num_inference_steps = 100
-    self = StableDiffusionHolder(fp_ckpt, fp_config, num_inference_steps=num_inference_steps)
-    xxx
-    #%% image A
-    image = Image.open('/home/lugo/latentblending/test1/img_0007.jpg') 
-    image = image.resize((32*20, 32*12))
-    promptA = "photo of a an ancient castle surrounded by a forest"
-    noise_level = 20 #gradio min=0, max=350, value=20
-    text_embeddingA = self.get_text_embedding(promptA)
-    cond, uc_full = self.get_cond_upscaling(image, text_embeddingA, noise_level)
-
-    list_samplesA = self.run_diffusion_upscaling(cond, uc_full)
-    image_result = Image.fromarray(self.latent2image(list_samplesA[-1]))
-    image_result.save('/home/lugo/latentblending/test1/high/imgA.jpg')
-    
-    
-    #%% image B
-    from latent_blending import interpolate_linear, interpolate_spherical
-    image = Image.open('/home/lugo/latentblending/test1/img_0006.jpg') 
-    image = image.resize((32*20, 32*12))
-    promptA = "photo of a an ancient castle surrounded by a forest"
-    promptB = "photo of a beautiful island on the horizon, blue sea with waves"
-    noise_level = 20 #gradio min=0, max=350, value=20
-    text_embeddingA = self.get_text_embedding(promptA)
-    text_embeddingB = self.get_text_embedding(promptB)
-    text_embedding = interpolate_linear(text_embeddingA, text_embeddingB, 1/8)
-    
-    cond, uc_full = self.get_cond_upscaling(image, text_embedding, noise_level)
-
-    list_samplesB = self.run_diffusion_upscaling(cond, uc_full)
-    image_result = Image.fromarray(self.latent2image(list_samplesB[-1]))
-    image_result.save('/home/lugo/latentblending/test1/high/imgB.jpg')
-    
-
-    #%% reality check: run only for 50 iter.
-    image = Image.open('/home/lugo/latentblending/test1/img_0007.jpg') 
-    image = image.resize((32*20, 32*12))
-    promptA = "photo of a an ancient castle surrounded by a forest"
-    noise_level = 20 #gradio min=0, max=350, value=20
-    text_embeddingA = self.get_text_embedding(promptA)
-    cond, uc_full = self.get_cond_upscaling(image, text_embeddingA, noise_level)
-
-    latents_inject = list_samplesA[50]
-    list_samplesAx = self.run_diffusion_upscaling(cond, uc_full, latents_inject, idx_start=50)
-    image_result = Image.fromarray(self.latent2image(list_samplesAx[-1]))
-    image_result.save('/home/lugo/latentblending/test1/high/imgA_restart.jpg')
-    
-    # RESULTS ARE NOT EXACTLY IDENTICAL! INVESTIGATE WHY
-
-    #%% mix in the middle! which uc_full should be taken? 
-    # expA: take the one from A
-    idx_start = 90
-    latentsA = list_samplesA[idx_start]
-    latentsB = list_samplesB[idx_start]
-    latents_inject = interpolate_spherical(latentsA, latentsB, 0.5)
-    
-    image = Image.open('/home/lugo/latentblending/test1/img_0007.jpg') 
-    image = image.resize((32*20, 32*12))
-    promptA = "photo of a an ancient castle surrounded by a forest"
-    noise_level = 20 #gradio min=0, max=350, value=20
-    text_embeddingA = self.get_text_embedding(promptA)
-    cond, uc_full = self.get_cond_upscaling(image, text_embeddingA, noise_level)
-
-    list_samples = self.run_diffusion_upscaling(cond, uc_full, latents_inject, idx_start=idx_start)
-    image_result = Image.fromarray(self.latent2image(list_samples[-1]))
-    image_result.save('/home/lugo/latentblending/test1/high/img_mix_expA_late.jpg')
-
-
-    #%% mix in the middle! which uc_full should be taken? 
-    # expA: take the one from B
-    idx_start = 90
-    latentsA = list_samplesA[idx_start]
-    latentsB = list_samplesB[idx_start]
-    latents_inject = interpolate_spherical(latentsA, latentsB, 0.5)
-    
-    image = Image.open('/home/lugo/latentblending/test1/img_0006.jpg').resize((32*20, 32*12))
-    promptA = "photo of a an ancient castle surrounded by a forest"
-    promptB = "photo of a beautiful island on the horizon, blue sea with waves"
-    noise_level = 20 #gradio min=0, max=350, value=20
-    text_embeddingA = self.get_text_embedding(promptA)
-    text_embeddingB = self.get_text_embedding(promptB)
-    text_embedding = interpolate_linear(text_embeddingA, text_embeddingB, 1/8)
-    cond, uc_full = self.get_cond_upscaling(image, text_embedding, noise_level)
-
-    list_samples = self.run_diffusion_upscaling(cond, uc_full, latents_inject, idx_start=idx_start)
-    image_result = Image.fromarray(self.latent2image(list_samples[-1]))
-    image_result.save('/home/lugo/latentblending/test1/high/img_mix_expB_late.jpg')
 
 
 
 
-    #%% lets blend the uc_full too! 
-    # expC
+    num_inference_steps = 20 # Number of diffusion interations
     
-    idx_start = 50
-    list_mix = np.linspace(0, 1, 20)
-    for fract_mix in list_mix:
-        # fract_mix = 0.75
-        latentsA = list_samplesA[idx_start]
-        latentsB = list_samplesB[idx_start]
-        latents_inject = interpolate_spherical(latentsA, latentsB, fract_mix)
-        
-        text_embeddingA = self.get_text_embedding(promptA)
-        text_embeddingB = self.get_text_embedding(promptB)
-        text_embedding = interpolate_linear(text_embeddingA, text_embeddingB, 1/8)
-        
-        imageA = Image.open('/home/lugo/latentblending/test1/img_0007.jpg').resize((32*20, 32*12))
-        condA, uc_fullA = self.get_cond_upscaling(imageA, text_embedding, noise_level)
-        
-        imageB = Image.open('/home/lugo/latentblending/test1/img_0006.jpg').resize((32*20, 32*12))
-        condB, uc_fullB = self.get_cond_upscaling(imageB, text_embedding, noise_level)
-        
-        condA['c_concat'][0] = interpolate_spherical(condA['c_concat'][0], condB['c_concat'][0], fract_mix)
-        uc_fullA['c_concat'][0] = interpolate_spherical(uc_fullA['c_concat'][0], uc_fullB['c_concat'][0], fract_mix)
+    # fp_ckpt = "../stable_diffusion_models/ckpt/768-v-ema.ckpt"
+    # fp_config = '../stablediffusion/configs/stable-diffusion/v2-inference-v.yaml'
     
-        list_samples = self.run_diffusion_upscaling(condA, uc_fullA, latents_inject, idx_start=idx_start)
-        image_result = Image.fromarray(self.latent2image(list_samples[-1]))
-        image_result.save(f'/home/lugo/latentblending/test1/high/img_mix_expC_{fract_mix}_start{idx_start}.jpg')
+    # fp_ckpt= "../stable_diffusion_models/ckpt/512-inpainting-ema.ckpt"
+    # fp_config = '../stablediffusion/configs//stable-diffusion/v2-inpainting-inference.yaml'
     
-    
-    
-#%%
+    fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_768-ema-pruned.ckpt"
+    fp_config = 'configs/v2-inference-v.yaml'
 
-list_imgs = os.listdir('/home/lugo/latentblending/test1/high/')
-list_imgs = [l for l in list_imgs if "expC" in l]
-list_imgs.pop(0)
-
-lx = []
-for fn in list_imgs:
-    Image.open
-
-
-#%%
+    
+    self = StableDiffusionHolder(fp_ckpt, fp_config, num_inference_steps)
+    
+    #%%
+    prompt = "painting of a house"
+    te = self.get_text_embedding(prompt)
+    
+    img = self.run_diffusion_standard(te, return_image=True)
     
     
-    
-    if False:
-    
-        num_inference_steps = 20 # Number of diffusion interations
-        
-        # fp_ckpt = "../stable_diffusion_models/ckpt/768-v-ema.ckpt"
-        # fp_config = '../stablediffusion/configs/stable-diffusion/v2-inference-v.yaml'
-        
-        fp_ckpt= "../stable_diffusion_models/ckpt/512-inpainting-ema.ckpt"
-        fp_config = '../stablediffusion/configs//stable-diffusion/v2-inpainting-inference.yaml'
-        
-        sdh = StableDiffusionHolder(fp_ckpt, fp_config, num_inference_steps)
-        # fp_ckpt= "../stable_diffusion_models/ckpt/512-base-ema.ckpt"
-        # fp_config = '../stablediffusion/configs//stable-diffusion/v2-inference.yaml'
-        
-        
-        
-        image_source = Image.fromarray((255*np.random.rand(512,512,3)).astype(np.uint8))
-        mask = 255*np.ones([512,512], dtype=np.uint8)
-        mask[0:50, 0:50] = 0
-        mask = Image.fromarray(mask)
-        
-        sdh.init_inpainting(image_source, mask)
-        text_embedding = sdh.get_text_embedding("photo of a strange house, surreal painting")
-        list_latents = sdh.run_diffusion_inpaint(text_embedding)
-        
-        idx_inject = 3
-        img_orig = sdh.latent2image(list_latents[-1])
-        list_inject = sdh.run_diffusion_inpaint(text_embedding, list_latents[idx_inject], idx_start=idx_inject+1)
-        img_inject = sdh.latent2image(list_inject[-1])
-        
-        img_diff = img_orig - img_inject
-        import matplotlib.pyplot as plt
-        plt.imshow(np.concatenate((img_orig, img_inject, img_diff), axis=1))
-    
-    
-

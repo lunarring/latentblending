@@ -86,6 +86,7 @@ class LatentBlending():
         # Initialize vars
         self.prompt1 = ""
         self.prompt2 = ""
+        self.negative_prompt = ""
         self.tree_latents = None
         self.tree_fracts = None
         self.tree_status = None
@@ -126,6 +127,12 @@ class LatentBlending():
         self.guidance_scale_base = guidance_scale
         self.guidance_scale = guidance_scale
         self.sdh.guidance_scale = guidance_scale
+        
+    def set_negative_prompt(self, negative_prompt):
+        r"""Set the negative prompt. Currenty only one negative prompt is supported
+        """
+        self.negative_prompt = negative_prompt
+        self.sdh.set_negative_prompt(negative_prompt)
         
     def set_guidance_mid_dampening(self, fract_mixing):
         r"""
@@ -1096,9 +1103,22 @@ if __name__ == "__main__":
     dp_img = "/home/lugo/latentblending/230107_144533" 
     self.run_upscaling_step2(dp_img)
 
+
 #%%
 """
+mr stealy
 
+
+            elif isinstance(negative_prompt, str):
+                uncond_tokens = [negative_prompt]
+                
+                
+
+"""
+
+
+#%%
+"""
 
 TODO Coding:
     CHECK IF ALL STUFF WORKS STILL: STANDARD MODEL, INPAINTING

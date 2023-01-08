@@ -35,9 +35,6 @@ import copy
 
 """
 experiment with slider as output -> does it change in the browser?
-guidance scale has no effect
-get a movie as result
-seed bug: also shows changes from before
 mid compression scaler can destroy tree
 """
 
@@ -77,9 +74,10 @@ class BlendingFrontend():
         self.guidance_scale = 4.0
         self.guidance_scale_mid_damper = 0.5
         self.mid_compression_scaler = 1.2
-        self.prompt1 = ''
-        self.prompt2 = ''
-        self.dp_base = '/home/lugo/latentblending'
+        self.prompt1 = ""
+        self.prompt2 = ""
+        self.negative_prompt = ""
+        self.dp_base = "/home/lugo/latentblending"
         self.list_settings = []
         self.state_prev = {}
         self.state_current = {}
@@ -137,6 +135,9 @@ class BlendingFrontend():
         self.prompt2 = value
         # print(f"changed prompt2 to {value}")
         
+    def change_negative_prompt(self, value):
+        self.negative_prompt = value
+        
     def change_seed1(self, value):
         self.seed1 = int(value)
         
@@ -170,15 +171,6 @@ class BlendingFrontend():
         self.lb.sdh.height = self.height
         self.lb.sdh.width = self.width
         
-        # list_nmb_branches = [2, 6, 15]
-        # list_injection_strength = [0.0, self.depth_strength, 0.9]
-        
-        # self.lb.setup_branching(
-        #                     num_inference_steps = self.num_inference_steps,
-        #                     list_nmb_branches = list_nmb_branches, 
-        #                     list_injection_strength = list_injection_strength
-        #                   )
-        
         self.lb.autosetup_branching(
                 depth_strength = self.depth_strength,
                 num_inference_steps = self.num_inference_steps,
@@ -187,6 +179,7 @@ class BlendingFrontend():
         
         self.lb.set_prompt1(self.prompt1)
         self.lb.set_prompt2(self.prompt2)
+        self.lb.set_negative_prompt(self.negative_prompt)
         
         self.lb.guidance_scale = self.guidance_scale
         self.lb.guidance_scale_mid_damper = self.guidance_scale_mid_damper
@@ -276,8 +269,8 @@ self = BlendingFrontend()
 with gr.Blocks() as demo:
     
     with gr.Row():
-        text1 = gr.Textbox(label="prompt 1")
-        text2 = gr.Textbox(label="prompt 2")
+        prompt1 = gr.Textbox(label="prompt 1")
+        prompt2 = gr.Textbox(label="prompt 2")
         
     with gr.Row():
         depth_strength = gr.Slider(0.01, 0.99, self.depth_strength, step=0.01, label='depth_strength', interactive=True) 
@@ -288,7 +281,8 @@ with gr.Blocks() as demo:
     with gr.Row():
         num_inference_steps = gr.Slider(5, 100, self.num_inference_steps, step=1, label='num_inference_steps', interactive=True)
         height = gr.Slider(256, 2048, self.height, step=128, label='height', interactive=True)
-        width = gr.Slider(256, 2048, self.width, step=128, label='width', interactive=True)           
+        width = gr.Slider(256, 2048, self.width, step=128, label='width', interactive=True) 
+        negative_prompt = gr.Textbox(label="negative prompt")          
             
     with gr.Row():
         b_newseed1 = gr.Button("rand seed 1")
@@ -324,10 +318,11 @@ with gr.Blocks() as demo:
     
     height.change(fn=self.change_height, inputs=height)
     width.change(fn=self.change_width, inputs=width)
-    text1.change(fn=self.change_prompt1, inputs=text1)
-    text2.change(fn=self.change_prompt2, inputs=text2)
+    prompt1.change(fn=self.change_prompt1, inputs=prompt1)
+    prompt2.change(fn=self.change_prompt2, inputs=prompt2)
     seed1.change(fn=self.change_seed1, inputs=seed1)
     seed2.change(fn=self.change_seed2, inputs=seed2)
+    negative_prompt.change(fn=self.change_negative_prompt, inputs=negative_prompt)
 
     b_newseed1.click(self.randomize_seed1, outputs=seed1)
     b_newseed2.click(self.randomize_seed2, outputs=seed2)
