@@ -140,7 +140,7 @@ class LatentBlending():
         towards 0.5 the minimum will be reached.
         """
         mid_factor = 1 - np.abs(fract_mixing - 0.5)/ 0.5
-        max_guidance_reduction = self.guidance_scale_base * (1-self.guidance_scale_mid_damper)
+        max_guidance_reduction = self.guidance_scale_base * (1-self.guidance_scale_mid_damper) - 1
         guidance_scale_effective = self.guidance_scale_base - max_guidance_reduction*mid_factor
         self.guidance_scale = guidance_scale_effective
         self.sdh.guidance_scale = guidance_scale_effective
