@@ -614,10 +614,10 @@ class LatentBlending():
     def run_upscaling_step1(
             self, 
             dp_img: str,
-            quality: str = 'upscaling_step1',
             depth_strength: float = 0.65,
+            num_inference_steps: int = 30,
+            nmb_branches_final: int = 10,
             fixed_seeds: Optional[List[int]] = None,
-            overwrite_folder: bool = False,
             ):
         r"""
         Initializes inpainting with a source and maks image.
@@ -644,11 +644,9 @@ class LatentBlending():
             fixed_seeds = list(np.random.randint(0, 1000000, 2).astype(np.int32))
 
         # Run latent blending
-        self.load_branching_profile(quality='upscaling_step1', depth_strength=depth_strength)
+        self.autosetup_branching(depth_strength, num_inference_steps, nmb_branches_final)
         imgs_transition = self.run_transition(fixed_seeds=fixed_seeds)
-        
         self.write_imgs_transition(dp_img, imgs_transition)
-        
 
         print(f"run_upscaling_step1: completed! {dp_img}")
         
@@ -656,8 +654,9 @@ class LatentBlending():
     def run_upscaling_step2(
             self, 
             dp_img: str,
-            quality: str = 'upscaling_step2',
-            depth_strength: float = 0.6,
+            depth_strength: float = 0.65,
+            num_inference_steps: int = 30,
+            nmb_branches_final: int = 10,
             fixed_seeds: Optional[List[int]] = None,
             ):
         
@@ -683,12 +682,7 @@ class LatentBlending():
         text_embeddingA = self.sdh.get_text_embedding(prompt1)
         text_embeddingB = self.sdh.get_text_embedding(prompt2)
         
-        self.load_branching_profile(quality='upscaling_step2', depth_strength=depth_strength)
-        
-        # list_nmb_branches = [2, 3, 4]
-        # list_injection_strength = [0.0, 0.6, 0.95]
-        # num_inference_steps = 100
-        # self.setup_branching(num_inference_steps, list_nmb_branches, list_injection_strength)
+        self.autosetup_branching(depth_strength, num_inference_steps, nmb_branches_final)
         
         duration_single_trans = 3
         list_fract_mixing = np.linspace(0, 1, nmb_images_lowres-1)

@@ -1,4 +1,4 @@
-Latent blending enables the creation of super-smooth video transitions between prompts. Powered by [stable diffusion 2.1](https://stability.ai/blog/stablediffusion2-1-release7-dec-2022), this method involves specific mixing of intermediate latent representations to create a seamless transition – with users having the option to choose full customization or preset options.
+Latent blending enables lightning-fast video transitions with incredible smoothness between prompts. Powered by [stable diffusion 2.1](https://stability.ai/blog/stablediffusion2-1-release7-dec-2022), this method involves specific mixing of intermediate latent representations to create a seamless transition – with users having the option to fully customize the transition and run high-resolution upscaling.
 
 # Quickstart
 ```python
@@ -27,6 +27,10 @@ To run a transition between two prompts where you want some part of the image to
 
 ## Example 3: Multi transition
 To run multiple transition between K prompts, resulting in a stitched video, run `example3_multitrans.py`
+
+## Example 4: High-resolution with upscaling
+![](example4.jpg)
+You can run a high-res transition using the x4 upscaling model in a two-stage procedure, see `example4_upscaling.py`
 
 # Customization
 
