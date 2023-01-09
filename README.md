@@ -28,7 +28,22 @@ To run a transition between two prompts where you want some part of the image to
 ## Example 3: Multi transition
 To run multiple transition between K prompts, resulting in a stitched video, run `example3_multitrans.py`
 
-# Relevant parameters
+# Customization
+
+## Most relevant parameters
+
+set_height
+
+
+## Set up the branching structure
+
+There are three ways to change the branching structure.
+### Use a preset
+```python 
+quality = 'medium' #choose from lowest, low, medium, high, ultra
+depth_strength = 0.5 # see above (Most relevant parameters)
+lb.load_branching_profile(quality, depth_strength)
+```
 
 
 # Installation
