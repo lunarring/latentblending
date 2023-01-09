@@ -1,7 +1,4 @@
-Latent blending enables you to generate super smooth video transitions between prompts. It is based on [stable diffusion 2.1](https://stability.ai/blog/stablediffusion2-1-release7-dec-2022). The key idea is to take the intermediate latent representations and mix them together before further developing them. You can fully specify how this happens or use presets. 
-
-
-Latent blending is an advanced technique that enables users to generate super-smooth transitions between different video prompts. Powered by [stable diffusion 2.1](https://stability.ai/blog/stablediffusion2-1-release7-dec-2022), this method involves specific mixing of intermediate latent representations to create a seamless transition – with users having the option to choose full customization or preset options.
+Latent blending enables the creation of super-smooth video transitions between prompts. Powered by [stable diffusion 2.1](https://stability.ai/blog/stablediffusion2-1-release7-dec-2022), this method involves specific mixing of intermediate latent representations to create a seamless transition – with users having the option to choose full customization or preset options.
 
 # Quickstart
 ```python
