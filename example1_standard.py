@@ -31,7 +31,7 @@ from stable_diffusion_holder import StableDiffusionHolder
 torch.set_grad_enabled(False)
 
 #%% First let us spawn a stable diffusion holder
-device = "cuda:0" 
+device = "cuda" 
 fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_768-ema-pruned.ckpt"
 fp_config = 'configs/v2-inference-v.yaml'
 
@@ -40,12 +40,11 @@ sdh = StableDiffusionHolder(fp_ckpt, fp_config, device)
     
 #%% Next let's set up all parameters
 quality = 'medium'
-depth_strength = 0.35 # Specifies how deep (in terms of diffusion iterations the first branching happens)
+depth_strength = 0.65 # Specifies how deep (in terms of diffusion iterations the first branching happens)
 fixed_seeds = [69731932, 504430820]
     
-# prompt1 = "A person in an open filed of grass watching a television, red colors dominate the scene, eerie light, dark clouds on the horizon, artistically rendered by Richter"
-prompt1 = "A person in a bar, people around him, a glass of baer, artistically rendered in the style of Hopper"
-prompt2 = "A person with a sad expression, looking at a painting of an older man, all in the style of Lucien Freud"
+prompt1 = "photo of a beautiful cherry forest covered in white flowers, ambient light, very detailed, magic"
+prompt2 = "photo of an golden statue with a funny hat, surrounded by ferns and vines, grainy analog photograph, mystical ambience, incredible detail"
 
 duration_transition = 12 # In seconds
 fps = 30
