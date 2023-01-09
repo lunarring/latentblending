@@ -107,6 +107,7 @@ pip install -v -U git+https://github.com/facebookresearch/xformers.git@main#egg=
 ```
 
 # How does latent blending work?
+## Technology
 ![](animation.gif)
 
 In the figure above, a diffusion tree is illustrated. The diffusion steps are represented on the y-axis, with temporal blending on the x-axis. The diffusion trajectory for the first prompt is the most left column, with the trajectory for the second prompt to the right. At the third iteration, three branches are created, followed by seven at iteration six and the final ten at iteration nine.
@@ -125,8 +126,6 @@ Instead of specifying the absolute injection indices using list_injection_idx, w
 list_injection_strength = [0, 0.3, 0.6, 0.9]
 lb.setup_branching(num_inference_steps, list_nmb_branches, list_injection_strength=list_injection_strength)
 ```
+## Perception
+With latent blending, we can create transitions that appear to defy the laws of nature, yet appear completely natural and believable. The key is to surpress processing in our [dorsal visual stream](https://en.wikipedia.org/wiki/Two-streams_hypothesis#Dorsal_stream), which is achieved by avoiding motion in the transition. Without motion, our visual system has difficulties detecting the transition, leaving viewers with the illusion of a single, continuous image. However, when motion is introduced, the visual system can detect the transition and the viewer becomes aware of the transition, leading to a jarring effect. Therefore, best results will be achieved when optimizing the transition parameters, particularly the depth of the first injection.
 
-
-what makes a transition a good transition?
-* absence of movement
-* every frame looks like a credible photo
