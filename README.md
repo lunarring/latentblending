@@ -62,23 +62,21 @@ lb.load_branching_profile(quality, depth_strength)
 
 ### Autosetup tree setup
 ```python 
+depth_strength = 0.5 # see above (Most relevant parameters)
 num_inference_steps = 30 # the number of diffusion steps
-list_nmb_branches = [2, 4, 8, 20]
-list_injection_strength = [0.0, 0.3, 0.5, 0.9]
+nmb_branches_final = 20 # how many diffusion images will be generated for the transition
 
 lb.autosetup_branching(num_inference_steps, list_nmb_branches, list_injection_strength)
 ```
 
 ### Fully manual
 ```python 
-depth_strength = 0.5 # see above (Most relevant parameters)
 num_inference_steps = 30 # the number of diffusion steps
-nmb_branches_final = 20 # how many diffusion images will be generated for the transition
+list_nmb_branches = [2, 4, 8, 20]
+list_injection_strength = [0.0, 0.3, 0.5, 0.9]
 
-lb.setup_branching(depth_strength, num_inference_steps, nmb_branches_final)
+lb.setup_branching(num_inference_steps, list_nmb_branches, list_injection_strength=list_injection_strength)
 ```
-
-
 
 # Installation
 #### Packages
@@ -108,8 +106,26 @@ pip install -v -U git+https://github.com/facebookresearch/xformers.git@main#egg=
 # (this can take dozens of minutes)
 ```
 
-# How does it work
+# How does latent blending work?
 ![](animation.gif)
+
+In the figure above, a diffusion tree is illustrated. The diffusion steps are represented on the y-axis, with temporal blending on the x-axis. The diffusion trajectory for the first prompt is the most left column, with the trajectory for the second prompt to the right. At the third iteration, three branches are created, followed by seven at iteration six and the final ten at iteration nine.
+
+This example can be manually set up using the following code
+```python 
+num_inference_steps = 10 
+list_nmb_branches = [2, 3, 7, 10]
+list_injection_idx = [0, 3, 6, 9]
+
+lb.setup_branching(num_inference_steps, list_nmb_branches, list_injection_idx=list_injection_idx)
+```
+
+Instead of specifying the absolute injection indices using list_injection_idx, we can also pass the list_injection_strength, which are independent of the total number of diffusion iterations (num_inference_steps).
+```python 
+list_injection_strength = [0, 0.3, 0.6, 0.9]
+lb.setup_branching(num_inference_steps, list_nmb_branches, list_injection_strength=list_injection_strength)
+```
+
 
 what makes a transition a good transition?
 * absence of movement
