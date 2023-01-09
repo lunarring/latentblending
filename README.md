@@ -33,7 +33,7 @@ To run multiple transition between K prompts, resulting in a stitched video, run
 
 ## Example 4: High-resolution with upscaling
 ![](example4.jpg)
-You can run a high-res transition using the x4 upscaling model in a two-stage procedure, see `example4_upscaling.py`. [View as video here.](https://youtu.be/y6qY1eev4H8)
+You can run a high-res transition using the x4 upscaling model in a two-stage procedure, see `example4_upscaling.py`. [View as video here.](https://vimeo.com/787639426/f88dae2ea6)
 
 # Customization
 
