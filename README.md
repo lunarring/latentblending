@@ -25,7 +25,7 @@ To run a simple transition between two prompts, run `example1_standard.py`
 ![](example2.jpg)
 To run a transition between two prompts where you want some part of the image to remain static, run `example2_inpaint.py`
 
-## Example 3: concatenated transition
+## Example 3: Multi transition
 To run multiple transition between K prompts, resulting in a stitched video, run `example3_multitrans.py`
 
 # Relevant parameters
