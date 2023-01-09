@@ -50,19 +50,23 @@ lb.set_guidance_scale(5.0)
 ### depth_strength / list_injection_strength
 The strength of the diffusion iterations determines when the blending process will begin. A value close to zero results in more creative and intricate outcomes, while a value closer to one indicates a simpler alpha blending. However, low values may also bring about the introduction of additional objects and motion.
 
+### quality
+When selecting a preset, you can choose the following values for quality:
+lowest, low, medium, high, ultra.
+This affects both the num_inference_steps and how many diffusion images will be generated for the transition
 
 ## Set up the branching structure
 
 There are three ways to change the branching structure.
 ### Presets
 ```python 
-quality = 'medium' #choose from lowest, low, medium, high, ultra
+quality = 'medium'
 depth_strength = 0.5 # see above (Most relevant parameters)
 
 lb.load_branching_profile(quality, depth_strength)
 ```
 
-### Autosetup tree setup
+### Autosetup tree
 ```python 
 depth_strength = 0.5 # see above (Most relevant parameters)
 num_inference_steps = 30 # the number of diffusion steps
@@ -71,7 +75,7 @@ nmb_branches_final = 20 # how many diffusion images will be generated for the tr
 lb.autosetup_branching(num_inference_steps, list_nmb_branches, list_injection_strength)
 ```
 
-### Fully manual
+### Manual specification
 ```python 
 num_inference_steps = 30 # the number of diffusion steps
 list_nmb_branches = [2, 4, 8, 20]
@@ -109,7 +113,7 @@ pip install -v -U git+https://github.com/facebookresearch/xformers.git@main#egg=
 ```
 
 # How does latent blending work?
-## Technology
+## Method
 ![](animation.gif)
 
 In the figure above, a diffusion tree is illustrated. The diffusion steps are represented on the y-axis, with temporal blending on the x-axis. The diffusion trajectory for the first prompt is the most left column, with the trajectory for the second prompt to the right. At the third iteration, three branches are created, followed by seven at iteration six and the final ten at iteration nine.
@@ -128,7 +132,7 @@ Instead of specifying the absolute injection indices using list_injection_idx, w
 list_injection_strength = [0, 0.3, 0.6, 0.9]
 lb.setup_branching(num_inference_steps, list_nmb_branches, list_injection_strength=list_injection_strength)
 ```
-## Perception
+## Perceptual aspects
 With latent blending, we can create transitions that appear to defy the laws of nature, yet appear completely natural and believable. The key is to surpress processing in our [dorsal visual stream](https://en.wikipedia.org/wiki/Two-streams_hypothesis#Dorsal_stream), which is achieved by avoiding motion in the transition. Without motion, our visual system has difficulties detecting the transition, leaving viewers with the illusion of a single, continuous image. However, when motion is introduced, the visual system can detect the transition and the viewer becomes aware of the transition, leading to a jarring effect. Therefore, best results will be achieved when optimizing the transition parameters, particularly the depth of the first injection.
 
 # Future work
