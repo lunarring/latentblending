@@ -35,7 +35,6 @@ import copy
 
 """
 experiment with slider as output -> does it change in the browser?
-mid compression scaler can destroy tree
 """
 
 
@@ -65,8 +64,7 @@ class BlendingFrontend():
     def __init__(self):
         self.use_debug = False
         self.share = True
-        self.height = 512
-        self.width = 512
+
         self.num_inference_steps = 30
         self.depth_strength = 0.25
         self.seed1 = 42
@@ -84,8 +82,15 @@ class BlendingFrontend():
         self.showing_current = True
         self.imgs_show_last = []
         self.imgs_show_current = []
+        self.nmb_branches_final = 13
+        self.nmb_imgs_show = 5
+        self.fps = 30
+        self.duration = 5
+        
         if not self.use_debug:
             self.init_diffusion()
+            self.height = self.lb.sdh.height
+            self.width = self.lb.sdh.width
         
     def init_diffusion(self):
         fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_512-ema-pruned.ckpt" 
@@ -94,7 +99,7 @@ class BlendingFrontend():
         # fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_768-ema-pruned.ckpt"
         # fp_config = 'configs/v2-inference-v.yaml'
         
-        sdh = StableDiffusionHolder(fp_ckpt, fp_config, height=self.height , width=self.width, num_inference_steps=self.num_inference_steps)
+        sdh = StableDiffusionHolder(fp_ckpt, fp_config, num_inference_steps=self.num_inference_steps)
         self.lb = LatentBlending(sdh)
         self.use_debug = False
     
@@ -126,6 +131,18 @@ class BlendingFrontend():
     def change_width(self, value):
         self.width = value
         print(f"changed width to {value}")
+        
+    def change_nmb_branches_final(self, value):
+        self.nmb_branches_final  = value
+        print(f"changed nmb_branches_final to {value}")
+        
+    def change_duration(self, value):
+        self.duration  = value
+        print(f"changed duration to {value}")
+        
+    def change_fps(self, value):
+        self.fps  = value
+        print(f"changed fps to {value}")
         
     def change_prompt1(self, value):
         self.prompt1 = value
@@ -174,8 +191,8 @@ class BlendingFrontend():
         self.lb.autosetup_branching(
                 depth_strength = self.depth_strength,
                 num_inference_steps = self.num_inference_steps,
-                nmb_branches_final = 13,
-                nmb_mindist = 2)
+                nmb_branches_final = self.nmb_branches_final,
+                nmb_mindist = 3)
         
         self.lb.set_prompt1(self.prompt1)
         self.lb.set_prompt2(self.prompt2)
@@ -189,12 +206,12 @@ class BlendingFrontend():
         imgs_transition = self.lb.run_transition(fixed_seeds=fixed_seeds)
         imgs_transition = [Image.fromarray(l) for l in imgs_transition]
         print(f"DONE DIFFUSION! Resulted in {len(imgs_transition)} images")
-        nmb_imgs_show = 5
-        idx_list = np.arange(0, nmb_imgs_show).astype(np.int32)*3
+        
+        assert np.mod((self.nmb_branches_final-self.nmb_imgs_show)/4, 1)==0, 'self.nmb_branches_final illegal value!'
+        idx_list = np.linspace(0, self.nmb_branches_final-1, self.nmb_imgs_show).astype(np.int32)
         list_imgs = []
         for j in idx_list:
             list_imgs.append(imgs_transition[j])
-        
         self.imgs_show_current = copy.deepcopy(list_imgs)
         
         return list_imgs
@@ -209,9 +226,9 @@ class BlendingFrontend():
         imgs_transition = self.lb.tree_final_imgs
         self.lb.write_imgs_transition(dp_img, imgs_transition)
         
-        fps = 20
+        fps = self.fps
         # Let's get more cheap frames via linear interpolation (duration_transition*fps frames)
-        imgs_transition_ext = add_frames_linear_interp(imgs_transition, 5, fps)
+        imgs_transition_ext = add_frames_linear_interp(imgs_transition, self.duration, fps)
 
         # Save as MP4
         fp_movie = os.path.join(dp_img, "movie_lowres.mp4")
@@ -271,6 +288,7 @@ with gr.Blocks() as demo:
     with gr.Row():
         prompt1 = gr.Textbox(label="prompt 1")
         prompt2 = gr.Textbox(label="prompt 2")
+        negative_prompt = gr.Textbox(label="negative prompt")          
         
     with gr.Row():
         depth_strength = gr.Slider(0.01, 0.99, self.depth_strength, step=0.01, label='depth_strength', interactive=True) 
@@ -280,9 +298,9 @@ with gr.Blocks() as demo:
         
     with gr.Row():
         num_inference_steps = gr.Slider(5, 100, self.num_inference_steps, step=1, label='num_inference_steps', interactive=True)
+        nmb_branches_final = gr.Slider(5, 125, self.nmb_branches_final, step=4, label='nmb trans images', interactive=True) 
         height = gr.Slider(256, 2048, self.height, step=128, label='height', interactive=True)
         width = gr.Slider(256, 2048, self.width, step=128, label='width', interactive=True) 
-        negative_prompt = gr.Textbox(label="negative prompt")          
             
     with gr.Row():
         b_newseed1 = gr.Button("rand seed 1")
@@ -290,7 +308,6 @@ with gr.Blocks() as demo:
         b_newseed2 = gr.Button("rand seed 2")
         seed2 = gr.Number(420, label="seed 2", interactive=True)
         b_compare = gr.Button("compare")
-        b_save = gr.Button('save!')
         
     with gr.Row():
         b_run = gr.Button('run preview!')
@@ -306,11 +323,17 @@ with gr.Blocks() as demo:
         compare_text = gr.Textbox(label="")
         
     with gr.Row():
+        fps = gr.Slider(1, 120, self.fps, step=1, label='fps', interactive=True)
+        duration = gr.Slider(0.1, 15, self.duration, step=0.1, label='duration', interactive=True) 
+        b_save = gr.Button('save video')
+    
+    with gr.Row():
         vid = gr.Video()
 
     # Bind the on-change methods
     depth_strength.change(fn=self.change_depth_strength, inputs=depth_strength)
     num_inference_steps.change(fn=self.change_num_inference_steps, inputs=num_inference_steps)
+    nmb_branches_final.change(fn=self.change_nmb_branches_final, inputs=nmb_branches_final)
     
     guidance_scale.change(fn=self.change_guidance_scale, inputs=guidance_scale)
     guidance_scale_mid_damper.change(fn=self.change_guidance_scale_mid_damper, inputs=guidance_scale_mid_damper)
@@ -320,9 +343,11 @@ with gr.Blocks() as demo:
     width.change(fn=self.change_width, inputs=width)
     prompt1.change(fn=self.change_prompt1, inputs=prompt1)
     prompt2.change(fn=self.change_prompt2, inputs=prompt2)
+    negative_prompt.change(fn=self.change_negative_prompt, inputs=negative_prompt)
     seed1.change(fn=self.change_seed1, inputs=seed1)
     seed2.change(fn=self.change_seed2, inputs=seed2)
-    negative_prompt.change(fn=self.change_negative_prompt, inputs=negative_prompt)
+    fps.change(fn=self.change_fps, inputs=fps)
+    duration.change(fn=self.change_duration, inputs=duration)
 
     b_newseed1.click(self.randomize_seed1, outputs=seed1)
     b_newseed2.click(self.randomize_seed2, outputs=seed2)
