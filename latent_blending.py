@@ -188,7 +188,7 @@ class LatentBlending():
             self, 
             quality: str = 'medium',
             depth_strength: float = 0.65,
-            nmb_frames: int = 360,
+            nmb_frames: int = 100,
             nmb_mindist: int = 3,
         ):
         r"""
@@ -275,7 +275,6 @@ class LatentBlending():
                 list_nmb_branches_clean.append(nmb_branches)
                 list_injection_idx_clean.append(idx_injection)
         list_nmb_branches_clean[-1] = nmb_branches_final
-        
                 
         list_injection_idx_clean = [int(l) for l in list_injection_idx_clean]
         list_nmb_branches_clean = [int(l) for l in list_nmb_branches_clean]
@@ -537,10 +536,9 @@ class LatentBlending():
             
         """
         
-        assert len(list_prompts) == len(list_seeds), "Supply the same number of prompts and seeds"
-        
         if list_seeds is None:
             list_seeds = list(np.random.randint(0, 10e10, len(list_prompts)))
+        assert len(list_prompts) == len(list_seeds), "Supply the same number of prompts and seeds"
         
         ms = MovieSaver(fp_movie, fps=fps)
         
@@ -810,6 +808,22 @@ class LatentBlending():
         """ 
         self.seed = seed
         self.sdh.seed = seed
+        
+    def set_width(self, width):
+        r"""
+        Set the width of the resulting image.
+        """ 
+        assert np.mod(width, 64) == 0, "set_width: value needs to be divisible by 64"
+        self.width = width
+        self.sdh.width = width
+        
+    def set_height(self, height):
+        r"""
+        Set the height of the resulting image.
+        """ 
+        assert np.mod(height, 64) == 0, "set_height: value needs to be divisible by 64"
+        self.height = height
+        self.sdh.height = height
         
     def inject_latents(self, list_latents, inject_img1=True, inject_img2=False):
         r"""
@@ -1104,32 +1118,4 @@ if __name__ == "__main__":
     self.run_upscaling_step2(dp_img)
 
 
-#%%
-"""
-mr stealy
 
-
-            elif isinstance(negative_prompt, str):
-                uncond_tokens = [negative_prompt]
-                
-                
-
-"""
-
-
-#%%
-"""
-
-TODO Coding:
-    CHECK IF ALL STUFF WORKS STILL: STANDARD MODEL, INPAINTING
-    RUNNING WITHOUT PROMPT!
-    save value ranges, can it be trashed?
-    in the middle: have more branches + lower guidance scale
-    
-TODO Other:
-    github
-    write text
-    make colab
-    license
-    twitter et al
-"""
