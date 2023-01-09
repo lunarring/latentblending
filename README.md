@@ -16,7 +16,8 @@ imgs_transition = lb.run_transition()
 ```
 ## Gradio UI
 To run the UI on your local machine, run `gradio_ui.py`
-You can find the [most relevant parameters here](parameters.md)
+
+You can find the [most relevant parameters here.](parameters.md)
 
 ## Example 1: Simple transition
 ![](example1.jpg)
