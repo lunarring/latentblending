@@ -252,7 +252,7 @@ class LatentBlending():
                 Deeper injections will cause (unwanted) formation of new structures,
                 more shallow values will go into alpha-blendy land.
             num_inference_steps: int
-                Number of diffusion steps. Larger values will take more compute time.
+                Number of diffusion steps. Higher values will take more compute time.
             nmb_branches_final (int): The number of diffusion-generated images 
                 at the end of the inference.
             nmb_mindist (int): The minimum number of diffusion steps 

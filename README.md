@@ -16,6 +16,7 @@ imgs_transition = lb.run_transition()
 ```
 ## Gradio UI
 To run the UI on your local machine, run `gradio_ui.py`
+You can find the [most relevant parameters here](parameters.md)
 
 ## Example 1: Simple transition
 ![](example1.jpg)
@@ -46,7 +47,7 @@ lb.set_width(1024)
 lb.set_guidance_scale(5.0)
 ```
 ### depth_strength / list_injection_strength
-The strength dictates how early the blending process starts. The closer its value is to zero, the more inventive the results will be; whereas, a value closer to one indicates a more simple alpha blending.
+The strength of the diffusion iterations determines when the blending process will begin. A value close to zero results in more creative and intricate outcomes, while a value closer to one indicates a simpler alpha blending. However, low values may also bring about the introduction of additional objects and motion.
 
 
 ## Set up the branching structure
