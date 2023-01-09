@@ -3,7 +3,8 @@
 Latent blending allows you to generate smooth video transitions between two prompts. It is based on [stable diffusion 2.1](https://stability.ai/blog/stablediffusion2-1-release7-dec-2022) and remixes the latent reprensetation using spherical linear interpolations. This results in imperceptible transitions, where one image slowly turns into another one. 
 
 # Example 1: simple transition
-(mp4), code
+![](example1.jpg)
+To run a simple transition between two prompts, run `example1_standard.py`.
 
 # Example 2: inpainting transition
 (mp4), code
