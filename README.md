@@ -39,10 +39,12 @@ pip install -r requirements.txt
 #### Download Models from Huggingface
 [Download the Stable Diffusion v2-1_768 Model](https://huggingface.co/stabilityai/stable-diffusion-2-1)
 
-[Download the Stable Diffusion 2.0 Inpainting Model (optional)](https://huggingface.co/stabilityai/stable-diffusion-2-inpainting)
+[Download the Stable Diffusion Inpainting Model (optional)](https://huggingface.co/stabilityai/stable-diffusion-2-inpainting)
 
-#### (Optional) Install [Xformers](https://github.com/facebookresearch/xformers)
-With xformers, stable diffusion 2 will run a bit faster. The recommended way of installation is via the supplied binaries (Linux).
+[Download the Stable Diffusion x4 Upscaler (optional)]([https://huggingface.co/stabilityai/stable-diffusion-2-inpainting](https://huggingface.co/stabilityai/stable-diffusion-x4-upscaler))
+
+#### (Optional but recommended) Install [Xformers](https://github.com/facebookresearch/xformers)
+With xformers, stable diffusion will run faster with smaller memory inprint. Necessary for higher resolutions / upscaling model.
 
 ```commandline
 conda install xformers -c xformers/label/dev
