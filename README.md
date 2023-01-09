@@ -32,18 +32,48 @@ To run multiple transition between K prompts, resulting in a stitched video, run
 
 ## Most relevant parameters
 
-set_height
+### Change the height/width
+```python 
+lb.set_height(512)
+lb.set_width(1024)
+```
+### Change guidance scale
+```python 
+lb.set_guidance_scale(5.0)
+```
+### depth_strength / list_injection_strength
+The strength dictates how early the blending process starts. The closer its value is to zero, the more inventive the results will be; whereas, a value closer to one indicates a more simple alpha blending.
 
 
 ## Set up the branching structure
 
 There are three ways to change the branching structure.
-### Use a preset
+### Presets
 ```python 
 quality = 'medium' #choose from lowest, low, medium, high, ultra
 depth_strength = 0.5 # see above (Most relevant parameters)
+
 lb.load_branching_profile(quality, depth_strength)
 ```
+
+### Autosetup tree setup
+```python 
+num_inference_steps = 30 # the number of diffusion steps
+list_nmb_branches = [2, 4, 8, 20]
+list_injection_strength = [0.0, 0.3, 0.5, 0.9]
+
+lb.autosetup_branching(num_inference_steps, list_nmb_branches, list_injection_strength)
+```
+
+### Fully manual
+```python 
+depth_strength = 0.5 # see above (Most relevant parameters)
+num_inference_steps = 30 # the number of diffusion steps
+nmb_branches_final = 20 # how many diffusion images will be generated for the transition
+
+lb.setup_branching(depth_strength, num_inference_steps, nmb_branches_final)
+```
+
 
 
 # Installation
