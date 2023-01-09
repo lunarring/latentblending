@@ -116,7 +116,17 @@ class StableDiffusionHolder:
                  device: str = None,
                  precision: str='autocast',
                  ):
-        
+        r"""
+        Initializes the stable diffusion holder, which contains the models and sampler.
+        Args:
+            fp_ckpt: File pointer to the .ckpt model file
+            fp_config: File pointer to the .yaml config file
+            num_inference_steps: Number of diffusion iterations. Will be overwritten by latent blending.
+            height: Height of the resulting image. 
+            width: Width of the resulting image. 
+            device: Device to run the model on.
+            precision: Precision to run the model on.
+        """
         self.seed = 42
         self.guidance_scale = 5.0
         
@@ -148,6 +158,9 @@ class StableDiffusionHolder:
         
         
     def init_model(self, fp_ckpt, fp_config):
+        r"""Loads the models and sampler.
+        """
+
         assert os.path.isfile(fp_ckpt), f"Your model checkpoint file does not exist: {fp_ckpt}"
         assert os.path.isfile(fp_config), f"Your config file does not exist: {fp_config}"
         self.fp_ckpt = fp_ckpt
