@@ -1,18 +1,23 @@
 # What is latent blending?
 
-Latent blending allows you to generate smooth video transitions between two prompts. It is based on [stable diffusion 2.1](https://stability.ai/blog/stablediffusion2-1-release7-dec-2022) and remixes the latent reprensetation using spherical linear interpolations. This results in imperceptible transitions, where one image slowly turns into another one. 
+Latent blending enables you to generate super smooth video transitions between prompts. It is based on [stable diffusion 2.1](https://stability.ai/blog/stablediffusion2-1-release7-dec-2022). The key idea is to take the intermediate latent representations and mix them together before further developing them. You can fully specify how this happens or use presets. 
 
 # Quickstart
 ```python
 fp_ckpt = 'path_to_SD2.ckpt'
 fp_config = 'path_to_config.yaml'
+
 sdh = StableDiffusionHolder(fp_ckpt, fp_config, device)
 lb = LatentBlending(sdh)
+
 lb.load_branching_profile(quality='medium', depth_strength=0.4)
 lb.set_prompt1('photo of my first prompt1')
 lb.set_prompt2('photo of my second prompt')
+
 imgs_transition = lb.run_transition()
 ```
+## Gradio UI
+To run the UI on your local machine, run `gradio_ui.py`
 
 ## Example 1: Simple transition
 ![](example1.jpg)
