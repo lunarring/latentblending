@@ -33,11 +33,6 @@ import copy
 
 
 
-"""
-experiment with slider as output -> does it change in the browser?
-"""
-
-
 #%%
 
 def compare_dicts(a, b):
@@ -80,6 +75,7 @@ class BlendingFrontend():
         self.state_prev = {}
         self.state_current = {}
         self.showing_current = True
+        self.branch2_independence = False
         self.imgs_show_last = []
         self.imgs_show_current = []
         self.nmb_branches_final = 13
@@ -91,13 +87,16 @@ class BlendingFrontend():
             self.init_diffusion()
             self.height = self.lb.sdh.height
             self.width = self.lb.sdh.width
+        else:
+            self.height = 420
+            self.width = 420
         
     def init_diffusion(self):
-        fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_512-ema-pruned.ckpt" 
-        fp_config = 'configs/v2-inference.yaml'
+        # fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_512-ema-pruned.ckpt" 
+        # fp_config = 'configs/v2-inference.yaml'
         
-        # fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_768-ema-pruned.ckpt"
-        # fp_config = 'configs/v2-inference-v.yaml'
+        fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_768-ema-pruned.ckpt"
+        fp_config = 'configs/v2-inference-v.yaml'
         
         sdh = StableDiffusionHolder(fp_ckpt, fp_config, num_inference_steps=self.num_inference_steps)
         self.lb = LatentBlending(sdh)
@@ -123,6 +122,11 @@ class BlendingFrontend():
     def change_mid_compression_scaler(self, value):
         self.mid_compression_scaler = value
         print(f"changed mid_compression_scaler to {value}")
+    
+    def change_branch2_independence(self):
+        self.branch2_independence = not self.branch2_independence
+        self.lb.branch2_independence = self.branch2_independence
+        print(f"changed branch2_independence to {self.branch2_independence}")
     
     def change_height(self, value):
         self.height = value
@@ -181,7 +185,7 @@ class BlendingFrontend():
         self.imgs_show_last = copy.deepcopy(self.imgs_show_current)
         
         if self.use_debug:
-            list_imgs = [(255*np.random.rand(200,200,3)).astype(np.uint8) for l in range(5)]
+            list_imgs = [(255*np.random.rand(self.height,self.width,3)).astype(np.uint8) for l in range(5)]
             self.imgs_show_current = copy.deepcopy(list_imgs)
             return list_imgs
         # FIXME TODO ASSERTS
@@ -291,20 +295,21 @@ with gr.Blocks() as demo:
         negative_prompt = gr.Textbox(label="negative prompt")          
         
     with gr.Row():
-        depth_strength = gr.Slider(0.01, 0.99, self.depth_strength, step=0.01, label='depth_strength', interactive=True) 
-        guidance_scale = gr.Slider(1, 25, self.guidance_scale, step=0.1, label='guidance_scale', interactive=True) 
-        guidance_scale_mid_damper = gr.Slider(0.01, 2.0, self.guidance_scale_mid_damper, step=0.01, label='guidance_scale_mid_damper', interactive=True) 
-        mid_compression_scaler = gr.Slider(1.0, 2.0, self.mid_compression_scaler, step=0.01, label='mid_compression_scaler', interactive=True) 
-        
-    with gr.Row():
         num_inference_steps = gr.Slider(5, 100, self.num_inference_steps, step=1, label='num_inference_steps', interactive=True)
-        nmb_branches_final = gr.Slider(5, 125, self.nmb_branches_final, step=4, label='nmb trans images', interactive=True) 
+        guidance_scale = gr.Slider(1, 25, self.guidance_scale, step=0.1, label='guidance_scale', interactive=True) 
         height = gr.Slider(256, 2048, self.height, step=128, label='height', interactive=True)
         width = gr.Slider(256, 2048, self.width, step=128, label='width', interactive=True) 
+        
+    with gr.Row():
+        depth_strength = gr.Slider(0.01, 0.99, self.depth_strength, step=0.01, label='depth_strength', interactive=True) 
+        nmb_branches_final = gr.Slider(5, 125, self.nmb_branches_final, step=4, label='nmb trans images', interactive=True) 
+        guidance_scale_mid_damper = gr.Slider(0.01, 2.0, self.guidance_scale_mid_damper, step=0.01, label='guidance_scale_mid_damper', interactive=True) 
+        mid_compression_scaler = gr.Slider(1.0, 2.0, self.mid_compression_scaler, step=0.01, label='mid_compression_scaler', interactive=True) 
             
     with gr.Row():
         b_newseed1 = gr.Button("rand seed 1")
         seed1 = gr.Number(42, label="seed 1", interactive=True)
+        branch2_independence = gr.Checkbox(label="branch2 independence", interactive=True)
         b_newseed2 = gr.Button("rand seed 2")
         seed2 = gr.Number(420, label="seed 2", interactive=True)
         b_compare = gr.Button("compare")
@@ -348,6 +353,7 @@ with gr.Blocks() as demo:
     seed2.change(fn=self.change_seed2, inputs=seed2)
     fps.change(fn=self.change_fps, inputs=fps)
     duration.change(fn=self.change_duration, inputs=duration)
+    branch2_independence.change(fn=self.change_branch2_independence)
 
     b_newseed1.click(self.randomize_seed1, outputs=seed1)
     b_newseed2.click(self.randomize_seed2, outputs=seed2)

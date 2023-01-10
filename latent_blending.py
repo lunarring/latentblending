@@ -103,6 +103,7 @@ class LatentBlending():
         self.noise_level_upscaling = 20
         self.list_injection_idx = None
         self.list_nmb_branches = None
+        self.branch2_independence = False
         self.set_guidance_scale(guidance_scale)
         self.init_mode()
         
@@ -487,7 +488,12 @@ class LatentBlending():
                         self.set_seed(fixed_seeds[0])
                     elif idx_branch == self.list_nmb_branches[0] -1:
                         self.set_seed(fixed_seeds[1])
-                list_latents = self.run_diffusion(list_conditionings, idx_stop=idx_stop)
+                
+                # Inject latents from first branch for very first block
+                if not self.branch2_independence and idx_branch==1:
+                    list_latents = self.tree_latents[0][0]
+                else:
+                    list_latents = self.run_diffusion(list_conditionings, idx_stop=idx_stop)
             else:
                 # find parents latents
                 b_parent1, b_parent2 = get_closest_idx(fract_mixing, self.tree_fracts[t_block-1])
@@ -1099,17 +1105,32 @@ def yml_save(fp_yml, dict_stuff):
 #%% le main
 if __name__ == "__main__":
     # xxxx
-
     
-    #%% RUN UPSCALING_STEP2 (highres)
-
-    fp_ckpt= "../stable_diffusion_models/ckpt/x4-upscaler-ema.ckpt"
-    fp_config = 'configs/x4-upscaling.yaml'
-    sdh = StableDiffusionHolder(fp_ckpt, fp_config)
-    #%% /home/lugo/latentblending/230106_210812   /
-    self = LatentBlending(sdh) 
-    dp_img = "/home/lugo/latentblending/230107_144533" 
-    self.run_upscaling_step2(dp_img)
-
-
+    #%% First let us spawn a stable diffusion holder
+    device = "cuda" 
+    fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_768-ema-pruned.ckpt"
+    fp_config = 'configs/v2-inference-v.yaml'
+    
+    sdh = StableDiffusionHolder(fp_ckpt, fp_config, device)
+    
+        
+    #%% Next let's set up all parameters
+    quality = 'medium'
+    depth_strength = 0.65 # Specifies how deep (in terms of diffusion iterations the first branching happens)
+    fixed_seeds = [69731932, 504430820]
+        
+    prompt1 = "photo of a beautiful cherry forest covered in white flowers, ambient light, very detailed, magic"
+    prompt2 = "photo of an golden statue with a funny hat, surrounded by ferns and vines, grainy analog photograph, mystical ambience, incredible detail"
+    
+    duration_transition = 12 # In seconds
+    fps = 30
+    
+    # Spawn latent blending
+    self = LatentBlending(sdh)
+    self.load_branching_profile(quality=quality, depth_strength=0.3)
+    self.set_prompt1(prompt1)
+    self.set_prompt2(prompt2)
+    
+    # Run latent blending
+    imgs_transition = self.run_transition(fixed_seeds=fixed_seeds)
 
