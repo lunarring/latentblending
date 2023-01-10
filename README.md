@@ -1,6 +1,6 @@
 # Quickstart
 
-Latent blending enables lightning-fast video transitions with incredible smoothness between prompts. Powered by [stable diffusion 2.1](https://stability.ai/blog/stablediffusion2-1-release7-dec-2022), this method involves specific mixing of intermediate latent representations to create a seamless transition – with users having the option to fully customize the transition and run high-resolution upscaling.
+Latent blending enables video transitions with incredible smoothness between prompts, computed within seconds. Powered by [stable diffusion 2.1](https://stability.ai/blog/stablediffusion2-1-release7-dec-2022), this method involves specific mixing of intermediate latent representations to create a seamless transition – with users having the option to fully customize the transition and run high-resolution upscaling.
 
 ```python
 fp_ckpt = 'path_to_SD2.ckpt'
