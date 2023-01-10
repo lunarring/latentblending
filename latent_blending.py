@@ -103,7 +103,7 @@ class LatentBlending():
         self.noise_level_upscaling = 20
         self.list_injection_idx = None
         self.list_nmb_branches = None
-        self.branch2_independence = False
+        self.branch1_influence = 0.0
         self.set_guidance_scale(guidance_scale)
         self.init_mode()
         
@@ -489,11 +489,13 @@ class LatentBlending():
                     elif idx_branch == self.list_nmb_branches[0] -1:
                         self.set_seed(fixed_seeds[1])
                 
+                list_latents = self.run_diffusion(list_conditionings, idx_stop=idx_stop)
+                
                 # Inject latents from first branch for very first block
-                if not self.branch2_independence and idx_branch==1:
-                    list_latents = self.tree_latents[0][0]
-                else:
-                    list_latents = self.run_diffusion(list_conditionings, idx_stop=idx_stop)
+                # FIXME: if more than 2 base branches?
+                if idx_branch==1 and self.branch1_influence > 0:
+                    fract_base_influence = np.clip(self.branch1_influence, 0, 1)
+                    list_latents[-1] = interpolate_spherical(list_latents[-1], self.tree_latents[0][0][-1], fract_base_influence)
             else:
                 # find parents latents
                 b_parent1, b_parent2 = get_closest_idx(fract_mixing, self.tree_fracts[t_block-1])
