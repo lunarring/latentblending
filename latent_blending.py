@@ -1,4 +1,5 @@
 # Copyright 2022 Lunar Ring. All rights reserved.
+# Written by Johannes Stelzer @j_stelzer
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -104,6 +105,8 @@ class LatentBlending():
         self.list_injection_idx = None
         self.list_nmb_branches = None
         self.branch1_influence = 0.0
+        self.branch1_fract_crossfeed = 0.65
+        self.branch1_insertion_completed = False
         self.set_guidance_scale(guidance_scale)
         self.init_mode()
         
@@ -414,6 +417,18 @@ class LatentBlending():
         self.list_nmb_branches_prev = self.list_nmb_branches[:]
         self.list_injection_idx_prev = self.list_injection_idx[:]
         
+        # Split the first block if there is branch1 crossfeeding
+        if self.branch1_influence > 0.0 and not self.branch1_insertion_completed:
+            self.list_nmb_branches.insert(1, 2)
+            idx_crossfeed = int(round(self.list_injection_idx[1]*self.branch1_fract_crossfeed))
+            self.list_injection_idx_ext.insert(1, idx_crossfeed)
+            self.tree_fracts.insert(1, self.tree_fracts[0])
+            self.tree_status.insert(1, self.tree_status[0])
+            self.tree_latents.insert(1, self.tree_latents[0])
+            self.branch1_insertion_completed = True
+            
+            
+        
         # Pre-define entire branching tree structures
         self.tree_final_imgs = [None]*self.list_nmb_branches[-1]
         nmb_blocks_time = len(self.list_injection_idx_ext)-1
@@ -495,7 +510,8 @@ class LatentBlending():
                 # FIXME: if more than 2 base branches?
                 if idx_branch==1 and self.branch1_influence > 0:
                     fract_base_influence = np.clip(self.branch1_influence, 0, 1)
-                    list_latents[-1] = interpolate_spherical(list_latents[-1], self.tree_latents[0][0][-1], fract_base_influence)
+                    for i in range(len(list_latents)):
+                        list_latents[i] = interpolate_spherical(list_latents[i], self.tree_latents[0][0][i], fract_base_influence)
             else:
                 # find parents latents
                 b_parent1, b_parent2 = get_closest_idx(fract_mixing, self.tree_fracts[t_block-1])
@@ -786,16 +802,27 @@ class LatentBlending():
             img_leaf.save(os.path.join(dp_img, f"lowres_img_{str(i).zfill(4)}.jpg"))
             
         # Dump everything relevant into yaml
-        dict_stuff = {}
-        dict_stuff['prompt1'] = self.prompt1
-        dict_stuff['prompt2'] = self.prompt2
-        dict_stuff['seed1'] = int(self.seed1)
-        dict_stuff['seed2'] = int(self.seed2)
-        dict_stuff['num_inference_steps'] = self.num_inference_steps
-        dict_stuff['height'] = self.sdh.height
-        dict_stuff['width'] = self.sdh.width
-        dict_stuff['nmb_images'] = len(imgs_transition)
-        yml_save(os.path.join(dp_img, "lowres.yaml"), dict_stuff)
+        state_dict = self.get_state_dict()
+        state_dict['nmb_images'] = len(imgs_transition)
+        yml_save(os.path.join(dp_img, "lowres.yaml"), state_dict)
+        
+    def get_state_dict(self):
+        state_dict = {}
+        grab_vars = ['prompt1', 'prompt2', 'seed1', 'seed2', 'height', 'width',
+                     'num_inference_steps', 'depth_strength', 'guidance_scale',
+                     'guidance_scale_mid_damper', 'mid_compression_scaler', 'negative_prompt']
+        for v in grab_vars:
+            if hasattr(self, v):
+                if v == 'seed1' or v == 'seed2':
+                    state_dict[v] = int(getattr(self, v))
+                elif v == 'guidance_scale':
+                    state_dict[v] = float(getattr(self, v))
+                    
+                else:
+                    state_dict[v] = getattr(self, v)
+                
+            
+        return state_dict
         
     def randomize_seed(self):
         r"""
@@ -1110,8 +1137,8 @@ if __name__ == "__main__":
     
     #%% First let us spawn a stable diffusion holder
     device = "cuda" 
-    fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_768-ema-pruned.ckpt"
-    fp_config = 'configs/v2-inference-v.yaml'
+    fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_512-ema-pruned.ckpt" 
+    fp_config = 'configs/v2-inference.yaml'
     
     sdh = StableDiffusionHolder(fp_ckpt, fp_config, device)
     
@@ -1129,6 +1156,7 @@ if __name__ == "__main__":
     
     # Spawn latent blending
     self = LatentBlending(sdh)
+    self.branch1_influence = 0.8
     self.load_branching_profile(quality=quality, depth_strength=0.3)
     self.set_prompt1(prompt1)
     self.set_prompt2(prompt2)

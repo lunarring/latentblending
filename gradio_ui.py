@@ -1,4 +1,5 @@
 # Copyright 2022 Lunar Ring. All rights reserved.
+# Written by Johannes Stelzer @j_stelzer
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -81,7 +82,7 @@ class BlendingFrontend():
         self.nmb_branches_final = 13
         self.nmb_imgs_show = 5
         self.fps = 30
-        self.duration = 5
+        self.duration = 10
         
         if not self.use_debug:
             self.init_diffusion()
@@ -302,8 +303,8 @@ with gr.Blocks() as demo:
         
     with gr.Row():
         num_inference_steps = gr.Slider(5, 100, self.num_inference_steps, step=1, label='num_inference_steps', interactive=True)
-        guidance_scale = gr.Slider(1, 25, self.guidance_scale, step=0.1, label='guidance_scale', interactive=True) 
         branch1_influence = gr.Slider(0.0, 1.0, self.branch1_influence, step=0.01, label='branch1_influence', interactive=True) 
+        guidance_scale = gr.Slider(1, 25, self.guidance_scale, step=0.1, label='guidance_scale', interactive=True) 
 
     with gr.Row():
         depth_strength = gr.Slider(0.01, 0.99, self.depth_strength, step=0.01, label='depth_strength', interactive=True) 
@@ -332,7 +333,7 @@ with gr.Blocks() as demo:
         
     with gr.Row():
         fps = gr.Slider(1, 120, self.fps, step=1, label='fps', interactive=True)
-        duration = gr.Slider(0.1, 15, self.duration, step=0.1, label='duration', interactive=True) 
+        duration = gr.Slider(0.1, 30, self.duration, step=0.1, label='duration', interactive=True) 
         b_save = gr.Button('save video')
     
     with gr.Row():

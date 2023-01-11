@@ -1,4 +1,5 @@
 # Copyright 2022 Lunar Ring. All rights reserved.
+# Written by Johannes Stelzer @j_stelzer
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,6 +30,7 @@ from typing import Callable, List, Optional, Union
 from latent_blending import LatentBlending, add_frames_linear_interp
 from stable_diffusion_holder import StableDiffusionHolder
 torch.set_grad_enabled(False)
+
 #%% Define vars for low-resoltion pass
 dp_img = "upscaling_bleding" # the results will be saved in this folder
 prompt1 = "photo of mount vesuvius erupting a terrifying pyroclastic ash cloud"
