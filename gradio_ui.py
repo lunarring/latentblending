@@ -33,7 +33,6 @@ import gradio as gr
 import copy
 
 
-
 #%%
 
 def compare_dicts(a, b):
@@ -76,7 +75,7 @@ class BlendingFrontend():
         self.state_prev = {}
         self.state_current = {}
         self.showing_current = True
-        self.branch1_influence = 0.0
+        self.branch1_influence = 0.3
         self.imgs_show_last = []
         self.imgs_show_current = []
         self.nmb_branches_final = 13
@@ -127,7 +126,6 @@ class BlendingFrontend():
     def change_branch1_influence(self, value):
         self.branch1_influence = value
         print(f"changed branch1_influence to {value}")
-
     
     def change_height(self, value):
         self.height = value
