@@ -419,6 +419,7 @@ class LatentBlending():
         
         # Split the first block if there is branch1 crossfeeding
         if self.branch1_influence > 0.0 and not self.branch1_insertion_completed:
+            assert self.list_nmb_branches[0]==2, 'branch1 influence currently requires the self.list_nmb_branches[0] = 0'
             self.list_nmb_branches.insert(1, 2)
             idx_crossfeed = int(round(self.list_injection_idx[1]*self.branch1_fract_crossfeed))
             self.list_injection_idx_ext.insert(1, idx_crossfeed)
@@ -507,7 +508,6 @@ class LatentBlending():
                 list_latents = self.run_diffusion(list_conditionings, idx_stop=idx_stop)
                 
                 # Inject latents from first branch for very first block
-                # FIXME: if more than 2 base branches?
                 if idx_branch==1 and self.branch1_influence > 0:
                     fract_base_influence = np.clip(self.branch1_influence, 0, 1)
                     for i in range(len(list_latents)):
