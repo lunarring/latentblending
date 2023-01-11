@@ -419,7 +419,9 @@ class LatentBlending():
         
         # Split the first block if there is branch1 crossfeeding
         if self.branch1_influence > 0.0 and not self.branch1_insertion_completed:
-            assert self.list_nmb_branches[0]==2, 'branch1 influence currently requires the self.list_nmb_branches[0] = 0'
+            assert self.list_nmb_branches[0]==2, 'branch1 influnce currently requires the self.list_nmb_branches[0] = 0'
+            self.branch1_influence = np.clip(self.branch1_influence, 0, 1)
+            self.branch1_fract_crossfeed = np.clip(self.branch1_fract_crossfeed, 0, 1)
             self.list_nmb_branches.insert(1, 2)
             idx_crossfeed = int(round(self.list_injection_idx[1]*self.branch1_fract_crossfeed))
             self.list_injection_idx_ext.insert(1, idx_crossfeed)
