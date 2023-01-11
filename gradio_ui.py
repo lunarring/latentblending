@@ -187,9 +187,9 @@ class BlendingFrontend():
             list_imgs = [(255*np.random.rand(self.height,self.width,3)).astype(np.uint8) for l in range(5)]
             self.imgs_show_current = copy.deepcopy(list_imgs)
             return list_imgs
-        # FIXME TODO ASSERTS
-        self.lb.sdh.height = self.height
-        self.lb.sdh.width = self.width
+        
+        self.lb.set_width(self.width)
+        self.lb.set_height(self.height)
         
         self.lb.autosetup_branching(
                 depth_strength = self.depth_strength,
