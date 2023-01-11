@@ -5,6 +5,12 @@
 - A value close to zero results in more creative and intricate outcomes, but may also introduce additional objects and motion.
 - A value closer to one indicates a simpler alpha blending.
 
+## branch1_influence
+- Determines the extent to which the initial branch affects the final branch. This generally improves the transitions!
+- A value of 0.0 disables this crossfeeding.
+- A value of 1.0 fully copies the latents from the first branch to the second.
+- Before the tree branches out into multiple parts, crossfeeding occurs at a specific point, known as list_injection_idx[1]. The precise location is determined by a value called branch1_fract_crossfeed, which ranges from 0.0 to 1.0.
+
 ## guidance_scale
 - Higher guidance scale encourages the creation of images that are closely aligned with the text.
 - Lower values are recommended for the best results in latent blending.
