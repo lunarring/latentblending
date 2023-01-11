@@ -1,5 +1,5 @@
 # Copyright 2022 Lunar Ring. All rights reserved.
-# Written by Johannes Stelzer @j_stelzer
+# Written by Johannes Stelzer, email stelzer@lunar-ring.ai twitter @j_stelzer
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.

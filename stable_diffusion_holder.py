@@ -1,5 +1,5 @@
 # Copyright 2022 Lunar Ring. All rights reserved.
-# Written by Johannes Stelzer @j_stelzer
+# Written by Johannes Stelzer, email stelzer@lunar-ring.ai twitter @j_stelzer
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -577,9 +577,12 @@ if __name__ == "__main__":
     self = StableDiffusionHolder(fp_ckpt, fp_config, num_inference_steps)
     
     #%%
-    prompt = "painting of a house"
+    self.width = 1536
+    self.height = 768
+    prompt = "360 degree equirectangular, a huge rocky hill full of pianos and keyboards, musical instruments, cinematic, masterpiece 8 k, artstation"
+    self.set_negative_prompt("out of frame, faces, rendering, blurry")
     te = self.get_text_embedding(prompt)
     
     img = self.run_diffusion_standard(te, return_image=True)
-    
+    Image.fromarray(img).show()
     
