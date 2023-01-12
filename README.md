@@ -4,9 +4,8 @@ Latent blending enables video transitions with incredible smoothness between pro
 
 ```python
 fp_ckpt = 'path_to_SD2.ckpt'
-fp_config = 'path_to_config.yaml'
 
-sdh = StableDiffusionHolder(fp_ckpt, fp_config, 'cuda')
+sdh = StableDiffusionHolder(fp_ckpt)
 lb = LatentBlending(sdh)
 
 lb.load_branching_profile(quality='medium', depth_strength=0.4)
