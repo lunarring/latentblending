@@ -180,8 +180,9 @@ class StableDiffusionHolder:
                 fp_config = 'configs/v2-inference-v.yaml' 
             else:
                 raise ValueError("auto detect of config failed. please specify fp_config manually!")
-                
-                
+            
+            assert os.path.isfile(fp_config), "Auto-init of the config file failed. Please specify manually."
+            
         assert os.path.isfile(fp_config), f"Your config file does not exist: {fp_config}"
         
 
