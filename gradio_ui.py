@@ -44,8 +44,7 @@ class BlendingFrontend():
             self.lb = LatentBlending(sdh)
             
         self.share = True
-
-        self.num_inference_steps = 30
+        self.num_inference_steps = 20
         self.depth_strength = 0.25
         self.seed1 = 42
         self.seed2 = 420
@@ -55,7 +54,6 @@ class BlendingFrontend():
         self.prompt1 = ""
         self.prompt2 = ""
         self.negative_prompt = ""
-        self.dp_base = "/output/"
         self.list_settings = []
         self.state_prev = {}
         self.state_current = {}
@@ -63,8 +61,8 @@ class BlendingFrontend():
         self.branch1_influence = 0.3
         self.imgs_show_last = []
         self.imgs_show_current = []
-        self.nmb_branches_final = 13
-        self.nmb_imgs_show = 5
+        self.nmb_branches_final = 9
+        self.nmb_imgs_show = 5 # don't change
         self.fps = 30
         self.duration = 10
         self.max_size_imgs = 200 # gradio otherwise mega slow 
@@ -198,11 +196,18 @@ class BlendingFrontend():
         list_imgs = []
         for j in idx_list:
             list_imgs.append(imgs_transition[j])
-        
-        list_imgs = self.downscale_imgs(list_imgs)
-        
+            
+        # list_imgs = self.downscale_imgs(list_imgs)
         self.imgs_show_current = copy.deepcopy(list_imgs)
-        return list_imgs
+        
+        # Save as jpgs on disk so we are not sending umcompressed data around
+        list_fp_imgs = []
+        for i in range(len(list_imgs)):
+            fp_img = f"img_preview_{i}.jpg"
+            list_imgs[i].save(fp_img)
+            list_fp_imgs.append(fp_img)
+        
+        return list_fp_imgs
     
 
         
@@ -210,16 +215,20 @@ class BlendingFrontend():
         if self.lb.tree_final_imgs[0] is None:
             return
         print("save is called!")
-        dp_img = os.path.join(self.dp_base, get_time("second"))
         imgs_transition = self.lb.tree_final_imgs
-        self.lb.write_imgs_transition(dp_img, imgs_transition)
+        
+        if False:
+            # skip for now: writing images.
+            dp_img = "/"
+            self.lb.write_imgs_transition(dp_img, imgs_transition)
+        
         
         fps = self.fps
         # Let's get more cheap frames via linear interpolation (duration_transition*fps frames)
         imgs_transition_ext = add_frames_linear_interp(imgs_transition, self.duration, fps)
 
         # Save as MP4
-        fp_movie = os.path.join(dp_img, "movie_lowres.mp4")
+        fp_movie = f"movie_{get_time('second')}.mp4"
         if os.path.isfile(fp_movie):
             os.remove(fp_movie)
         ms = MovieSaver(fp_movie, fps=fps)
@@ -241,40 +250,12 @@ class BlendingFrontend():
         return state_dict
         
         
-    def compare_last(self):
-        if len(self.state_prev) == 0 or len(self.state_current) == 0:
-            return ""
-        
-        if self.showing_current:
-            # inject the last images that were shown and return str of changes
-            str_fill = "showing last version: "
-            list_return = self.imgs_show_last
-            idx = 0
-            verb = 'was'
-            self.showing_current = False
-
-        elif not self.showing_current:
-            # inject the current images and show no string
-            str_fill = "showing current version: "
-            verb = 'is'
-            idx = 1
-            list_return = self.imgs_show_current
-            self.showing_current = True
-        
-        dict_diff = compare_dicts(self.state_prev, self.state_current)
-        for key in dict_diff:
-            str_fill += f"{key} {verb} {dict_diff[key][idx]}, "
-        str_fill = str_fill[:-2]
-        list_return.extend([str_fill])
-        return list_return 
-        
 if __name__ == "__main__":    
     
     fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_512-ema-pruned.ckpt" 
-    sdh = StableDiffusionHolder(fp_ckpt)
+    # sdh = StableDiffusionHolder(fp_ckpt)
     
-    self = BlendingFrontend(sdh)
-    
+    self = BlendingFrontend(None)
     
     with gr.Blocks() as demo:
         
@@ -303,7 +284,6 @@ if __name__ == "__main__":
             seed1 = gr.Number(42, label="seed 1", interactive=True)
             b_newseed2 = gr.Button("rand seed 2")
             seed2 = gr.Number(420, label="seed 2", interactive=True)
-            b_compare = gr.Button("compare")
             
         with gr.Row():
             b_run = gr.Button('run preview!')
@@ -316,12 +296,9 @@ if __name__ == "__main__":
             img5 = gr.Image(label="5/5")
             
         with gr.Row():
-            compare_text = gr.Textbox(label="")
-            
-        with gr.Row():
             fps = gr.Slider(1, 120, self.fps, step=1, label='fps', interactive=True)
             duration = gr.Slider(0.1, 30, self.duration, step=0.1, label='duration', interactive=True) 
-            b_save = gr.Button('save video')
+            b_save = gr.Button('make video')
         
         with gr.Row():
             vid = gr.Video()
@@ -348,7 +325,6 @@ if __name__ == "__main__":
     
         b_newseed1.click(self.randomize_seed1, outputs=seed1)
         b_newseed2.click(self.randomize_seed2, outputs=seed2)
-        b_compare.click(self.compare_last, outputs=[img1, img2, img3, img4, img5, compare_text])
         b_run.click(self.run, outputs=[img1, img2, img3, img4, img5])
         b_save.click(self.save, outputs=vid)
     
