@@ -136,7 +136,15 @@ lb.setup_branching(num_inference_steps, list_nmb_branches, list_injection_streng
 ## Perceptual aspects
 With latent blending, we can create transitions that appear to defy the laws of nature, yet appear completely natural and believable. The key is to surpress processing in our [dorsal visual stream](https://en.wikipedia.org/wiki/Two-streams_hypothesis#Dorsal_stream), which is achieved by avoiding motion in the transition. Without motion, our visual system has difficulties detecting the transition, leaving viewers with the illusion of a single, continuous image. However, when motion is introduced, the visual system can detect the transition and the viewer becomes aware of the transition, leading to a jarring effect. Therefore, best results will be achieved when optimizing the transition parameters, particularly the depth of the first injection.
 
-# Future work
-* Depth model
-* Zooming etc.
+# Coming soon...
+- [ ] Huggingface / Colab Interface
+- [ ] Interface for making longer videos with many prompts
+- [ ] Transitions with Depth model
+- [ ] Zooming
+- [ ] Iso-perceptual spacing for branches (=better transitions)
+
+Stay tuned on twitter: ```@j_stelzer```
+
+Contact: ```stelzer@lunar-ring.ai``` (Johannes Stelzer)
+
 
