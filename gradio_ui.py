@@ -56,8 +56,13 @@ def compare_dicts(a, b):
     return c
 
 class BlendingFrontend():
-    def __init__(self):
-        self.use_debug = False
+    def __init__(self, sdh=None):
+        if sdh is None:
+            self.use_debug = True
+        else:
+            self.use_debug = False
+            self.lb = LatentBlending(sdh)
+            
         self.share = True
 
         self.num_inference_steps = 30
@@ -70,7 +75,7 @@ class BlendingFrontend():
         self.prompt1 = ""
         self.prompt2 = ""
         self.negative_prompt = ""
-        self.dp_base = "/home/lugo/latentblending"
+        self.dp_base = "/output/"
         self.list_settings = []
         self.state_prev = {}
         self.state_current = {}
@@ -84,24 +89,13 @@ class BlendingFrontend():
         self.duration = 10
         
         if not self.use_debug:
-            self.init_diffusion()
+            self.lb.sdh.num_inference_steps = self.num_inference_steps
             self.height = self.lb.sdh.height
             self.width = self.lb.sdh.width
         else:
             self.height = 420
             self.width = 420
         
-    def init_diffusion(self):
-        fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_512-ema-pruned.ckpt" 
-        fp_config = 'configs/v2-inference.yaml'
-        
-        # fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_768-ema-pruned.ckpt"
-        # fp_config = 'configs/v2-inference-v.yaml'
-        
-        sdh = StableDiffusionHolder(fp_ckpt, fp_config, num_inference_steps=self.num_inference_steps)
-        self.lb = LatentBlending(sdh)
-        self.use_debug = False
-    
     def change_depth_strength(self, value):
         self.depth_strength = value
         print(f"changed depth_strength to {value}")
@@ -284,83 +278,90 @@ class BlendingFrontend():
         list_return.extend([str_fill])
         return list_return 
         
-self = BlendingFrontend()
-
-
-with gr.Blocks() as demo:
+if __name__ == "__main__":    
     
-    with gr.Row():
-        prompt1 = gr.Textbox(label="prompt 1")
-        prompt2 = gr.Textbox(label="prompt 2")
-        negative_prompt = gr.Textbox(label="negative prompt")          
+    fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_512-ema-pruned.ckpt" 
+    fp_config = 'configs/v2-inference.yaml'
+    
+    sdh = StableDiffusionHolder(fp_ckpt, fp_config)
+    
+    self = BlendingFrontend(sdh)
+    
+    
+    with gr.Blocks() as demo:
         
-    with gr.Row():
-        nmb_branches_final = gr.Slider(5, 125, self.nmb_branches_final, step=4, label='nmb trans images', interactive=True) 
-        height = gr.Slider(256, 2048, self.height, step=128, label='height', interactive=True)
-        width = gr.Slider(256, 2048, self.width, step=128, label='width', interactive=True) 
-        
-    with gr.Row():
-        num_inference_steps = gr.Slider(5, 100, self.num_inference_steps, step=1, label='num_inference_steps', interactive=True)
-        branch1_influence = gr.Slider(0.0, 1.0, self.branch1_influence, step=0.01, label='branch1_influence', interactive=True) 
-        guidance_scale = gr.Slider(1, 25, self.guidance_scale, step=0.1, label='guidance_scale', interactive=True) 
-
-    with gr.Row():
-        depth_strength = gr.Slider(0.01, 0.99, self.depth_strength, step=0.01, label='depth_strength', interactive=True) 
-        guidance_scale_mid_damper = gr.Slider(0.01, 2.0, self.guidance_scale_mid_damper, step=0.01, label='guidance_scale_mid_damper', interactive=True) 
-        mid_compression_scaler = gr.Slider(1.0, 2.0, self.mid_compression_scaler, step=0.01, label='mid_compression_scaler', interactive=True) 
+        with gr.Row():
+            prompt1 = gr.Textbox(label="prompt 1")
+            prompt2 = gr.Textbox(label="prompt 2")
+            negative_prompt = gr.Textbox(label="negative prompt")          
             
-    with gr.Row():
-        b_newseed1 = gr.Button("rand seed 1")
-        seed1 = gr.Number(42, label="seed 1", interactive=True)
-        b_newseed2 = gr.Button("rand seed 2")
-        seed2 = gr.Number(420, label="seed 2", interactive=True)
-        b_compare = gr.Button("compare")
-        
-    with gr.Row():
-        b_run = gr.Button('run preview!')
-        
-    with gr.Row():
-        img1 = gr.Image(label="1/5")
-        img2 = gr.Image(label="2/5")
-        img3 = gr.Image(label="3/5")
-        img4 = gr.Image(label="4/5")
-        img5 = gr.Image(label="5/5")
-        
-    with gr.Row():
-        compare_text = gr.Textbox(label="")
-        
-    with gr.Row():
-        fps = gr.Slider(1, 120, self.fps, step=1, label='fps', interactive=True)
-        duration = gr.Slider(0.1, 30, self.duration, step=0.1, label='duration', interactive=True) 
-        b_save = gr.Button('save video')
+        with gr.Row():
+            nmb_branches_final = gr.Slider(5, 125, self.nmb_branches_final, step=4, label='nmb trans images', interactive=True) 
+            height = gr.Slider(256, 2048, self.height, step=128, label='height', interactive=True)
+            width = gr.Slider(256, 2048, self.width, step=128, label='width', interactive=True) 
+            
+        with gr.Row():
+            num_inference_steps = gr.Slider(5, 100, self.num_inference_steps, step=1, label='num_inference_steps', interactive=True)
+            branch1_influence = gr.Slider(0.0, 1.0, self.branch1_influence, step=0.01, label='branch1_influence', interactive=True) 
+            guidance_scale = gr.Slider(1, 25, self.guidance_scale, step=0.1, label='guidance_scale', interactive=True) 
     
-    with gr.Row():
-        vid = gr.Video()
-
-    # Bind the on-change methods
-    depth_strength.change(fn=self.change_depth_strength, inputs=depth_strength)
-    num_inference_steps.change(fn=self.change_num_inference_steps, inputs=num_inference_steps)
-    nmb_branches_final.change(fn=self.change_nmb_branches_final, inputs=nmb_branches_final)
+        with gr.Row():
+            depth_strength = gr.Slider(0.01, 0.99, self.depth_strength, step=0.01, label='depth_strength', interactive=True) 
+            guidance_scale_mid_damper = gr.Slider(0.01, 2.0, self.guidance_scale_mid_damper, step=0.01, label='guidance_scale_mid_damper', interactive=True) 
+            mid_compression_scaler = gr.Slider(1.0, 2.0, self.mid_compression_scaler, step=0.01, label='mid_compression_scaler', interactive=True) 
+                
+        with gr.Row():
+            b_newseed1 = gr.Button("rand seed 1")
+            seed1 = gr.Number(42, label="seed 1", interactive=True)
+            b_newseed2 = gr.Button("rand seed 2")
+            seed2 = gr.Number(420, label="seed 2", interactive=True)
+            b_compare = gr.Button("compare")
+            
+        with gr.Row():
+            b_run = gr.Button('run preview!')
+            
+        with gr.Row():
+            img1 = gr.Image(label="1/5")
+            img2 = gr.Image(label="2/5")
+            img3 = gr.Image(label="3/5")
+            img4 = gr.Image(label="4/5")
+            img5 = gr.Image(label="5/5")
+            
+        with gr.Row():
+            compare_text = gr.Textbox(label="")
+            
+        with gr.Row():
+            fps = gr.Slider(1, 120, self.fps, step=1, label='fps', interactive=True)
+            duration = gr.Slider(0.1, 30, self.duration, step=0.1, label='duration', interactive=True) 
+            b_save = gr.Button('save video')
+        
+        with gr.Row():
+            vid = gr.Video()
     
-    guidance_scale.change(fn=self.change_guidance_scale, inputs=guidance_scale)
-    guidance_scale_mid_damper.change(fn=self.change_guidance_scale_mid_damper, inputs=guidance_scale_mid_damper)
-    mid_compression_scaler.change(fn=self.change_mid_compression_scaler, inputs=mid_compression_scaler)
+        # Bind the on-change methods
+        depth_strength.change(fn=self.change_depth_strength, inputs=depth_strength)
+        num_inference_steps.change(fn=self.change_num_inference_steps, inputs=num_inference_steps)
+        nmb_branches_final.change(fn=self.change_nmb_branches_final, inputs=nmb_branches_final)
+        
+        guidance_scale.change(fn=self.change_guidance_scale, inputs=guidance_scale)
+        guidance_scale_mid_damper.change(fn=self.change_guidance_scale_mid_damper, inputs=guidance_scale_mid_damper)
+        mid_compression_scaler.change(fn=self.change_mid_compression_scaler, inputs=mid_compression_scaler)
+        
+        height.change(fn=self.change_height, inputs=height)
+        width.change(fn=self.change_width, inputs=width)
+        prompt1.change(fn=self.change_prompt1, inputs=prompt1)
+        prompt2.change(fn=self.change_prompt2, inputs=prompt2)
+        negative_prompt.change(fn=self.change_negative_prompt, inputs=negative_prompt)
+        seed1.change(fn=self.change_seed1, inputs=seed1)
+        seed2.change(fn=self.change_seed2, inputs=seed2)
+        fps.change(fn=self.change_fps, inputs=fps)
+        duration.change(fn=self.change_duration, inputs=duration)
+        branch1_influence.change(fn=self.change_branch1_influence, inputs=branch1_influence)
     
-    height.change(fn=self.change_height, inputs=height)
-    width.change(fn=self.change_width, inputs=width)
-    prompt1.change(fn=self.change_prompt1, inputs=prompt1)
-    prompt2.change(fn=self.change_prompt2, inputs=prompt2)
-    negative_prompt.change(fn=self.change_negative_prompt, inputs=negative_prompt)
-    seed1.change(fn=self.change_seed1, inputs=seed1)
-    seed2.change(fn=self.change_seed2, inputs=seed2)
-    fps.change(fn=self.change_fps, inputs=fps)
-    duration.change(fn=self.change_duration, inputs=duration)
-    branch1_influence.change(fn=self.change_branch1_influence, inputs=branch1_influence)
-
-    b_newseed1.click(self.randomize_seed1, outputs=seed1)
-    b_newseed2.click(self.randomize_seed2, outputs=seed2)
-    b_compare.click(self.compare_last, outputs=[img1, img2, img3, img4, img5, compare_text])
-    b_run.click(self.run, outputs=[img1, img2, img3, img4, img5])
-    b_save.click(self.save, outputs=vid)
-
-demo.launch(share=self.share)
+        b_newseed1.click(self.randomize_seed1, outputs=seed1)
+        b_newseed2.click(self.randomize_seed2, outputs=seed2)
+        b_compare.click(self.compare_last, outputs=[img1, img2, img3, img4, img5, compare_text])
+        b_run.click(self.run, outputs=[img1, img2, img3, img4, img5])
+        b_save.click(self.save, outputs=vid)
+    
+    demo.launch(share=self.share)
