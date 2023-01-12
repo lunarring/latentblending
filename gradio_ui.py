@@ -26,7 +26,7 @@ from PIL import Image
 import torch
 from movie_util import MovieSaver
 from typing import Callable, List, Optional, Union
-from latent_blending import get_time, yml_save, LatentBlending, add_frames_linear_interp
+from latent_blending import get_time, yml_save, LatentBlending, add_frames_linear_interp, compare_dicts
 from stable_diffusion_holder import StableDiffusionHolder
 torch.set_grad_enabled(False)
 import gradio as gr
@@ -34,26 +34,6 @@ import copy
 
 
 #%%
-
-def compare_dicts(a, b):
-    """
-    Compares two dictionaries a and b and returns a dictionary c, with all 
-    keys,values that have shared keys in a and b but same values in a and b.
-    The values of a and b are stacked together in the output.
-    Example:
-        a = {}; a['bobo'] = 4
-        b = {}; b['bobo'] = 5
-        c = dict_compare(a,b)
-        c = {"bobo",[4,5]}
-    """
-    c = {}
-    for key in a.keys():
-        if key in b.keys():
-          val_a = a[key]  
-          val_b = b[key]  
-          if val_a != val_b:
-              c[key] = [val_a, val_b]
-    return c
 
 class BlendingFrontend():
     def __init__(self, sdh=None):

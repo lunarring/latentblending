@@ -1113,6 +1113,25 @@ def get_time(resolution=None):
         raise ValueError("bad resolution provided: %s" %resolution)
     return t
 
+def compare_dicts(a, b):
+    """
+    Compares two dictionaries a and b and returns a dictionary c, with all 
+    keys,values that have shared keys in a and b but same values in a and b.
+    The values of a and b are stacked together in the output.
+    Example:
+        a = {}; a['bobo'] = 4
+        b = {}; b['bobo'] = 5
+        c = dict_compare(a,b)
+        c = {"bobo",[4,5]}
+    """
+    c = {}
+    for key in a.keys():
+        if key in b.keys():
+          val_a = a[key]  
+          val_b = b[key]  
+          if val_a != val_b:
+              c[key] = [val_a, val_b]
+    return c
 
 def yml_load(fp_yml, print_fields=False):
     """
@@ -1143,6 +1162,8 @@ if __name__ == "__main__":
     fp_config = 'configs/v2-inference.yaml'
     
     sdh = StableDiffusionHolder(fp_ckpt, fp_config, device)
+    
+    xxx
     
         
     #%% Next let's set up all parameters
