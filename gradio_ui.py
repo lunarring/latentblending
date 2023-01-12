@@ -253,9 +253,9 @@ class BlendingFrontend():
 if __name__ == "__main__":    
     
     fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_512-ema-pruned.ckpt" 
-    # sdh = StableDiffusionHolder(fp_ckpt)
+    sdh = StableDiffusionHolder(fp_ckpt)
     
-    self = BlendingFrontend(None)
+    self = BlendingFrontend(sdh)
     
     with gr.Blocks() as demo:
         
