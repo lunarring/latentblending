@@ -67,14 +67,15 @@ class BlendingFrontend():
         self.nmb_imgs_show = 5
         self.fps = 30
         self.duration = 10
+        self.max_size_imgs = 200 # gradio otherwise mega slow 
         
         if not self.use_debug:
             self.lb.sdh.num_inference_steps = self.num_inference_steps
             self.height = self.lb.sdh.height
             self.width = self.lb.sdh.width
         else:
-            self.height = 420
-            self.width = 420
+            self.height = 768
+            self.width = 768
         
     def change_depth_strength(self, value):
         self.depth_strength = value
@@ -150,6 +151,10 @@ class BlendingFrontend():
         print(f"randomize_seed2: new seed = {self.seed2}")
         return seed
         
+    
+    def downscale_imgs(self, list_imgs):
+        return [l.resize((self.max_size_imgs, self.max_size_imgs)) for l in list_imgs]
+    
     def run(self, x):
         print("STARTING DIFFUSION!")
         self.state_prev = self.state_current.copy()
@@ -159,7 +164,10 @@ class BlendingFrontend():
         
         if self.use_debug:
             list_imgs = [(255*np.random.rand(self.height,self.width,3)).astype(np.uint8) for l in range(5)]
+            list_imgs = [Image.fromarray(l) for l in list_imgs]
+            list_imgs = self.downscale_imgs(list_imgs)
             self.imgs_show_current = copy.deepcopy(list_imgs)
+            print("DONE! SENDING BACK RESULTS")
             return list_imgs
         
         self.lb.set_width(self.width)
@@ -190,8 +198,10 @@ class BlendingFrontend():
         list_imgs = []
         for j in idx_list:
             list_imgs.append(imgs_transition[j])
-        self.imgs_show_current = copy.deepcopy(list_imgs)
         
+        list_imgs = self.downscale_imgs(list_imgs)
+        
+        self.imgs_show_current = copy.deepcopy(list_imgs)
         return list_imgs
     
 
@@ -261,9 +271,7 @@ class BlendingFrontend():
 if __name__ == "__main__":    
     
     fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_512-ema-pruned.ckpt" 
-    fp_config = 'configs/v2-inference.yaml'
-    
-    sdh = StableDiffusionHolder(fp_ckpt, fp_config)
+    sdh = StableDiffusionHolder(fp_ckpt)
     
     self = BlendingFrontend(sdh)
     
