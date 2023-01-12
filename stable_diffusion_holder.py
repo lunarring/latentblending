@@ -163,8 +163,27 @@ class StableDiffusionHolder:
         """
 
         assert os.path.isfile(fp_ckpt), f"Your model checkpoint file does not exist: {fp_ckpt}"
-        assert os.path.isfile(fp_config), f"Your config file does not exist: {fp_config}"
         self.fp_ckpt = fp_ckpt
+        
+        # Auto init the config?
+        if fp_config is None:
+            fn_ckpt = os.path.basename(fp_ckpt)
+            if 'depth' in fn_ckpt:
+                fp_config = 'configs/v2-midas-inference.yaml'
+            elif 'inpain' in fn_ckpt:
+                fp_config = 'configs/v2-inpainting-inference.yaml'
+            elif 'upscaler' in fn_ckpt:
+                fp_config = 'configs/x4-upscaling.yaml' 
+            elif '512' in fn_ckpt:
+                fp_config = 'configs/v2-inference.yaml' 
+            elif '768'in fn_ckpt:
+                fp_config = 'configs/v2-inference-v.yaml' 
+            else:
+                raise ValueError("auto detect of config failed. please specify fp_config manually!")
+                
+                
+        assert os.path.isfile(fp_config), f"Your config file does not exist: {fp_config}"
+        
 
         config = OmegaConf.load(fp_config)
         
@@ -173,6 +192,17 @@ class StableDiffusionHolder:
 
         self.model = self.model.to(self.device)
         self.sampler = DDIMSampler(self.model)
+        
+            
+    def init_auto_res(self):
+        r"""Automatically set the resolution to the one used in training.
+        """
+        if '768' in self.fp_ckpt:
+            self.height = 768
+            self.width = 768
+        else:
+            self.height = 512
+            self.width = 512
         
     def set_negative_prompt(self, negative_prompt):
         r"""Set the negative prompt. Currenty only one negative prompt is supported
@@ -185,17 +215,6 @@ class StableDiffusionHolder:
         
         if len(self.negative_prompt) > 1:
             self.negative_prompt = [self.negative_prompt[0]]
-            
-    def init_auto_res(self):
-        r"""Automatically set the resolution to the one used in training.
-        """
-        if '768' in self.fp_ckpt:
-            self.height = 768
-            self.width = 768
-        else:
-            self.height = 512
-            self.width = 512
-        
 
     def init_inpainting(
             self, 
@@ -571,10 +590,12 @@ if __name__ == "__main__":
     # fp_config = '../stablediffusion/configs//stable-diffusion/v2-inpainting-inference.yaml'
     
     fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_768-ema-pruned.ckpt"
-    fp_config = 'configs/v2-inference-v.yaml'
+    # fp_config = 'configs/v2-inference-v.yaml'
 
     
-    self = StableDiffusionHolder(fp_ckpt, fp_config, num_inference_steps)
+    self = StableDiffusionHolder(fp_ckpt, num_inference_steps=num_inference_steps)
+    
+    xxx
     
     #%%
     self.width = 1536

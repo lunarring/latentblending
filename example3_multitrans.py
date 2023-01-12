@@ -31,10 +31,8 @@ from stable_diffusion_holder import StableDiffusionHolder
 torch.set_grad_enabled(False)
 
 #%% First let us spawn a stable diffusion holder
-device = "cuda"
 fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_768-ema-pruned.ckpt"
-fp_config = 'configs/v2-inference-v.yaml'
-sdh = StableDiffusionHolder(fp_ckpt, fp_config, device)
+sdh = StableDiffusionHolder(fp_ckpt)
 
     
 #%% Let's setup the multi transition

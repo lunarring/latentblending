@@ -34,11 +34,8 @@ from stable_diffusion_holder import StableDiffusionHolder
 torch.set_grad_enabled(False)
 
 #%% First let us spawn a stable diffusion holder
-device = "cuda"
 fp_ckpt= "../stable_diffusion_models/ckpt/512-inpainting-ema.ckpt"
-fp_config = '../stablediffusion/configs//stable-diffusion/v2-inpainting-inference.yaml'
-sdh = StableDiffusionHolder(fp_ckpt, fp_config, device)
-
+sdh = StableDiffusionHolder(fp_ckpt)
 
 #%% Let's first make a source image and mask.
 quality = 'medium'

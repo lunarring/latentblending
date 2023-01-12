@@ -45,17 +45,15 @@ depth_strength_lores = 0.5
 
 device = "cuda" 
 fp_ckpt_lores = "../stable_diffusion_models/ckpt/v2-1_512-ema-pruned.ckpt" 
-fp_config_lores = 'configs/v2-inference.yaml'
 
 #%% Define vars for high-resoltion pass
 fp_ckpt_hires = "../stable_diffusion_models/ckpt/x4-upscaler-ema.ckpt"
-fp_config_hires = 'configs/x4-upscaling.yaml'
 depth_strength_hires = 0.65
 num_inference_steps_hires = 100
 nmb_branches_final_hires = 6
 
 #%% Run low-res pass
-sdh = StableDiffusionHolder(fp_ckpt_lores, fp_config_lores, device)
+sdh = StableDiffusionHolder(fp_ckpt_lores)
 lb = LatentBlending(sdh)
 lb.set_prompt1(prompt1)
 lb.set_prompt2(prompt2)
@@ -64,6 +62,6 @@ lb.set_height(height)
 lb.run_upscaling_step1(dp_img, depth_strength_lores, num_inference_steps_lores, nmb_branches_final_lores, fixed_seeds)
 
 #%% Run high-res pass
-sdh = StableDiffusionHolder(fp_ckpt_hires, fp_config_hires)
+sdh = StableDiffusionHolder(fp_ckpt_hires)
 lb = LatentBlending(sdh) 
 lb.run_upscaling_step2(dp_img, depth_strength_hires, num_inference_steps_hires, nmb_branches_final_hires)
