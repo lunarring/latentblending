@@ -1,5 +1,4 @@
 # Copyright 2022 Lunar Ring. All rights reserved.
-# Written by Johannes Stelzer, email stelzer@lunar-ring.ai twitter @j_stelzer
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -149,6 +148,9 @@ class MovieSaver():
         r"""
         Call this function to finalize the movie. If you forget to call it your movie will be garbage.
         """
+        if self.nmb_frames == 0:
+            print("You did not write any frames yet! nmb_frames = 0. Cannot save.")
+            return
         self.ffmpg_process.stdin.close()
         self.ffmpg_process.wait()
         duration = int(self.nmb_frames / self.fps)
