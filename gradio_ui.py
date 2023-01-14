@@ -254,7 +254,6 @@ if __name__ == "__main__":
     
     fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_512-ema-pruned.ckpt" 
     sdh = StableDiffusionHolder(fp_ckpt)
-    
     self = BlendingFrontend(sdh)
     
     with gr.Blocks() as demo:
@@ -286,7 +285,7 @@ if __name__ == "__main__":
             seed2 = gr.Number(420, label="seed 2", interactive=True)
             
         with gr.Row():
-            b_run = gr.Button('run preview!')
+            b_run = gr.Button('step1: run preview!')
             
         with gr.Row():
             img1 = gr.Image(label="1/5")
@@ -294,14 +293,15 @@ if __name__ == "__main__":
             img3 = gr.Image(label="3/5")
             img4 = gr.Image(label="4/5")
             img5 = gr.Image(label="5/5")
-            
-        with gr.Row():
-            fps = gr.Slider(1, 120, self.fps, step=1, label='fps', interactive=True)
-            duration = gr.Slider(0.1, 30, self.duration, step=0.1, label='duration', interactive=True) 
-            b_save = gr.Button('make video')
         
         with gr.Row():
+            b_save = gr.Button('step2: render video')
             vid = gr.Video()
+        
+        with gr.Row():
+            duration = gr.Slider(0.1, 30, self.duration, step=0.1, label='duration', interactive=True) 
+            fps = gr.Slider(1, 120, self.fps, step=1, label='fps', interactive=True)
+            
     
         # Bind the on-change methods
         depth_strength.change(fn=self.change_depth_strength, inputs=depth_strength)
@@ -328,4 +328,4 @@ if __name__ == "__main__":
         b_run.click(self.run, outputs=[img1, img2, img3, img4, img5])
         b_save.click(self.save, outputs=vid)
     
-    demo.launch(share=self.share)
+    demo.launch(share=self.share, inbrowser=True, inline=False)
