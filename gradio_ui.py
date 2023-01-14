@@ -58,7 +58,7 @@ class BlendingFrontend():
         self.state_prev = {}
         self.state_current = {}
         self.showing_current = True
-        self.branch1_influence = 0.3
+        self.branch1_influence = 0.02
         self.imgs_show_last = []
         self.imgs_show_current = []
         self.nmb_branches_final = 9
