@@ -2,7 +2,7 @@
 
 Latent blending enables video transitions with incredible smoothness between prompts, computed within seconds. Powered by [stable diffusion 2.1](https://stability.ai/blog/stablediffusion2-1-release7-dec-2022), this method involves specific mixing of intermediate latent representations to create a seamless transition – with users having the option to fully customize the transition and run high-resolution upscaling.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1BhnWlNzkkokKvB9LEwp2O-yuvZXGNN_b?usp=sharing)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1I77--5PS6C-sAskl9OggS1zR0HLKdq1M?usp=sharing)
 
 ```python
 fp_ckpt = 'path_to_SD2.ckpt'
