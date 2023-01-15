@@ -802,11 +802,16 @@ class LatentBlending():
         for i, img in enumerate(imgs_transition):
             img_leaf = Image.fromarray(img)
             img_leaf.save(os.path.join(dp_img, f"lowres_img_{str(i).zfill(4)}.jpg"))
-            
+        
+        fp_yml = os.path.join(dp_img, "lowres.yaml") 
+        self.save_statedict(fp_yml)
+        
+        
+    def save_statedict(self, fp_yml):
         # Dump everything relevant into yaml
         state_dict = self.get_state_dict()
         state_dict['nmb_images'] = len(imgs_transition)
-        yml_save(os.path.join(dp_img, "lowres.yaml"), state_dict)
+        yml_save(fp_yml, state_dict)
         
     def get_state_dict(self):
         state_dict = {}
@@ -1034,7 +1039,6 @@ def add_frames_linear_interp(
         return list_imgs
     
     list_imgs_float = [img.astype(np.float32) for img in list_imgs]
-    
     # Distribute missing frames, append nmb_frames_to_insert(i) frames for each frame
     mean_nmb_frames_insert = nmb_frames_missing/nmb_frames_diff
     constfact = np.floor(mean_nmb_frames_insert)
