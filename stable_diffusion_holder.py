@@ -177,7 +177,9 @@ class StableDiffusionHolder:
             elif '512' in fn_ckpt:
                 fp_config = 'configs/v2-inference.yaml' 
             elif '768'in fn_ckpt:
-                fp_config = 'configs/v2-inference-v.yaml' 
+                fp_config = 'configs/v2-inference-v.yaml'             
+            elif 'v1-5' in fn_ckpt:
+                fp_config = 'configs/v1-inference.yaml' 
             else:
                 raise ValueError("auto detect of config failed. please specify fp_config manually!")
             
