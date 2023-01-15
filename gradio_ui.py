@@ -33,6 +33,13 @@ import gradio as gr
 import copy
 
 
+"""
+try this:
+    button variant 'primary' for main call-to-action, 'secondary' for a more subdued style
+    gr.Column(scale=1, min_width=600):
+
+"""
+
 #%%
 
 class BlendingFrontend():
@@ -150,10 +157,7 @@ class BlendingFrontend():
         return seed
         
     
-    def downscale_imgs(self, list_imgs):
-        return [l.resize((self.max_size_imgs, self.max_size_imgs)) for l in list_imgs]
-    
-    def run(self, x):
+    def run(self):
         print("STARTING DIFFUSION!")
         self.state_prev = self.state_current.copy()
         self.state_current = self.get_state_dict()
@@ -188,55 +192,38 @@ class BlendingFrontend():
         
         fixed_seeds = [self.seed1, self.seed2]
         imgs_transition = self.lb.run_transition(fixed_seeds=fixed_seeds)
-        imgs_transition = [Image.fromarray(l) for l in imgs_transition]
+        
         print(f"DONE DIFFUSION! Resulted in {len(imgs_transition)} images")
         
         assert np.mod((self.nmb_branches_final-self.nmb_imgs_show)/4, 1)==0, 'self.nmb_branches_final illegal value!'
         idx_list = np.linspace(0, self.nmb_branches_final-1, self.nmb_imgs_show).astype(np.int32)
-        list_imgs = []
+        list_imgs_preview = []
         for j in idx_list:
-            list_imgs.append(imgs_transition[j])
+            list_imgs_preview.append(Image.fromarray(imgs_transition[j]))
             
-        # list_imgs = self.downscale_imgs(list_imgs)
-        self.imgs_show_current = copy.deepcopy(list_imgs)
-        
         # Save as jpgs on disk so we are not sending umcompressed data around
+        timestamp = get_time('second')
         list_fp_imgs = []
-        for i in range(len(list_imgs)):
-            fp_img = f"img_preview_{i}.jpg"
-            list_imgs[i].save(fp_img)
+        for i in range(len(list_imgs_preview)):
+            fp_img = f"img_preview_{i}_{timestamp}.jpg"
+            list_imgs_preview[i].save(fp_img)
             list_fp_imgs.append(fp_img)
         
-        return list_fp_imgs
-    
+        # Save the movie as well
+        imgs_transition_ext = add_frames_linear_interp(imgs_transition, self.duration, self.fps)
 
-        
-    def save(self):
-        if self.lb.tree_final_imgs[0] is None:
-            return
-        print("save is called!")
-        imgs_transition = self.lb.tree_final_imgs
-        
-        if False:
-            # skip for now: writing images.
-            dp_img = "/"
-            self.lb.write_imgs_transition(dp_img, imgs_transition)
-        
-        
-        fps = self.fps
-        # Let's get more cheap frames via linear interpolation (duration_transition*fps frames)
-        imgs_transition_ext = add_frames_linear_interp(imgs_transition, self.duration, fps)
-
-        # Save as MP4
-        fp_movie = f"movie_{get_time('second')}.mp4"
+        # Save as movie
+        fp_movie = f"movie_{timestamp}.mp4"
         if os.path.isfile(fp_movie):
             os.remove(fp_movie)
-        ms = MovieSaver(fp_movie, fps=fps)
+        ms = MovieSaver(fp_movie, fps=self.fps)
         for img in tqdm(imgs_transition_ext):
             ms.write_frame(img)
         ms.finalize()
-        return fp_movie
-
+        print("DONE SAVING MOVIE! SENDING BACK...")
+        list_return = list_fp_imgs + [fp_movie]
+        return list_return
+    
 
         
     def get_state_dict(self):
@@ -252,9 +239,10 @@ class BlendingFrontend():
         
 if __name__ == "__main__":    
     
-    fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_512-ema-pruned.ckpt" 
-    sdh = StableDiffusionHolder(fp_ckpt)
-    self = BlendingFrontend(sdh)
+    fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_768-ema-pruned.ckpt" 
+    # fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_512-ema-pruned.ckpt" 
+    # sdh = StableDiffusionHolder(fp_ckpt)
+    self = BlendingFrontend(None)
     
     with gr.Blocks() as demo:
         
@@ -275,17 +263,17 @@ if __name__ == "__main__":
     
         with gr.Row():
             depth_strength = gr.Slider(0.01, 0.99, self.depth_strength, step=0.01, label='depth_strength', interactive=True) 
+            duration = gr.Slider(0.1, 30, self.duration, step=0.1, label='video duration', interactive=True) 
             guidance_scale_mid_damper = gr.Slider(0.01, 2.0, self.guidance_scale_mid_damper, step=0.01, label='guidance_scale_mid_damper', interactive=True) 
-            mid_compression_scaler = gr.Slider(1.0, 2.0, self.mid_compression_scaler, step=0.01, label='mid_compression_scaler', interactive=True) 
                 
         with gr.Row():
-            b_newseed1 = gr.Button("rand seed 1")
+            b_run = gr.Button('COMPUTE!', variant='primary')
             seed1 = gr.Number(42, label="seed 1", interactive=True)
-            b_newseed2 = gr.Button("rand seed 2")
             seed2 = gr.Number(420, label="seed 2", interactive=True)
             
-        with gr.Row():
-            b_run = gr.Button('step1: run preview!')
+            with gr.Column():
+                b_newseed1 = gr.Button("randomize \nseed 1", variant='secondary')
+                b_newseed2 = gr.Button("randomize \nseed 2", variant='secondary')
             
         with gr.Row():
             img1 = gr.Image(label="1/5")
@@ -295,14 +283,8 @@ if __name__ == "__main__":
             img5 = gr.Image(label="5/5")
         
         with gr.Row():
-            b_save = gr.Button('step2: render video')
             vid = gr.Video()
         
-        with gr.Row():
-            duration = gr.Slider(0.1, 30, self.duration, step=0.1, label='duration', interactive=True) 
-            fps = gr.Slider(1, 120, self.fps, step=1, label='fps', interactive=True)
-            
-    
         # Bind the on-change methods
         depth_strength.change(fn=self.change_depth_strength, inputs=depth_strength)
         num_inference_steps.change(fn=self.change_num_inference_steps, inputs=num_inference_steps)
@@ -310,7 +292,6 @@ if __name__ == "__main__":
         
         guidance_scale.change(fn=self.change_guidance_scale, inputs=guidance_scale)
         guidance_scale_mid_damper.change(fn=self.change_guidance_scale_mid_damper, inputs=guidance_scale_mid_damper)
-        mid_compression_scaler.change(fn=self.change_mid_compression_scaler, inputs=mid_compression_scaler)
         
         height.change(fn=self.change_height, inputs=height)
         width.change(fn=self.change_width, inputs=width)
@@ -319,13 +300,11 @@ if __name__ == "__main__":
         negative_prompt.change(fn=self.change_negative_prompt, inputs=negative_prompt)
         seed1.change(fn=self.change_seed1, inputs=seed1)
         seed2.change(fn=self.change_seed2, inputs=seed2)
-        fps.change(fn=self.change_fps, inputs=fps)
         duration.change(fn=self.change_duration, inputs=duration)
         branch1_influence.change(fn=self.change_branch1_influence, inputs=branch1_influence)
     
         b_newseed1.click(self.randomize_seed1, outputs=seed1)
         b_newseed2.click(self.randomize_seed2, outputs=seed2)
-        b_run.click(self.run, outputs=[img1, img2, img3, img4, img5])
-        b_save.click(self.save, outputs=vid)
+        b_run.click(self.run, outputs=[img1, img2, img3, img4, img5, vid])
     
     demo.launch(share=self.share, inbrowser=True, inline=False)
