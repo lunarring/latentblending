@@ -188,9 +188,12 @@ def concatenate_movies(fp_final: str, list_fp_movies: List[str]):
         for item in list_concat:
             fa.write("%s\n" % item)
             
-    dp_movie = os.path.split(fp_final)[0]
     cmd = f'ffmpeg -f concat -safe 0 -i {fp_list} -c copy {fp_final}'
-    subprocess.call(cmd, shell=True, cwd=dp_movie)
+    dp_movie = os.path.split(fp_final)[0]
+    if len(dp_movie) > 0:
+    	subprocess.call(cmd, shell=True, cwd=dp_movie)
+    else:
+        subprocess.call(cmd, shell=True)
     os.remove(fp_list)
     print(f"concatenate_movies: success! Watch here: {fp_final}")
 
@@ -221,7 +224,7 @@ if __name__ == "__main__":
     fps=2
     list_fp_movies = []
     for k in range(4):
-        fp_movie = f"/tmp/my_random_movie_{k}.mkv"
+        fp_movie = f"/tmp/my_random_movie_{k}.mp4"
         list_fp_movies.append(fp_movie)
         ms = MovieSaver(fp_movie, fps=fps)
         for fn in tqdm(range(30)):
@@ -229,6 +232,6 @@ if __name__ == "__main__":
             ms.write_frame(img)
         ms.finalize()
     
-    fp_final = "/tmp/my_concatenated_movie.mkv"
+    fp_final = "/tmp/my_concatenated_movie.mp4"
     concatenate_movies(fp_final, list_fp_movies)
 
