@@ -109,6 +109,8 @@ class LatentBlending():
         self.branch1_insertion_completed = False
         self.set_guidance_scale(guidance_scale)
         self.init_mode()
+        self.multi_transition_img_first = None
+        self.multi_transition_img_last = None
         
 
     def init_mode(self):
@@ -574,7 +576,7 @@ class LatentBlending():
             if i==0:
                 self.set_prompt1(list_prompts[i])
                 self.set_prompt2(list_prompts[i+1])
-                recycle_img1 = False    
+                recycle_img1 = False
             else:
                 self.swap_forward()
                 self.set_prompt2(list_prompts[i+1])
@@ -584,11 +586,15 @@ class LatentBlending():
             list_imgs = self.run_transition(recycle_img1=recycle_img1, fixed_seeds=local_seeds)
             list_imgs_interp = add_frames_linear_interp(list_imgs, fps, duration_single_trans)
             
+            if i==0:
+                self.multi_transition_img_first = list_imgs[0]
+            
             # Save movie frame
             for img in list_imgs_interp:
                 ms.write_frame(img)
                 
         ms.finalize()
+        self.multi_transition_img_last = list_imgs[-1]
         
         print("run_multi_transition: All completed.")
 
