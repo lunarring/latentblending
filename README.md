@@ -31,7 +31,7 @@ To run a transition between two prompts where you want some part of the image to
 
 ## Example 3: Multi transition
 To run multiple transition between K prompts, resulting in a stitched video, run `example3_multitrans.py`.
-[View a longer example video here](https://vimeo.com/789052336/80dcb545b2
+[View a longer example video here.](https://vimeo.com/789052336/80dcb545b2)
 
 ## Example 4: High-resolution with upscaling
 ![](example4.jpg)
