@@ -33,6 +33,13 @@ import gradio as gr
 import copy
 
 
+"""
+TODOS:
+    - clean parameter handling
+    - three buttons: diffuse A, diffuse B, make transition
+    - collapse for easy mode
+    - transition quality in terms of render time
+"""
 
 #%%
 
@@ -45,7 +52,7 @@ class BlendingFrontend():
             self.lb = LatentBlending(sdh)
             
         self.share = True
-        self.num_inference_steps = 20
+        self.num_inference_steps = 30
         self.depth_strength = 0.25
         self.seed1 = 42
         self.seed2 = 420
@@ -58,11 +65,13 @@ class BlendingFrontend():
         self.list_settings = []
         self.state_current = {}
         self.showing_current = True
-        self.branch1_influence = 0.02
+        self.branch1_influence = 0.1
+        self.branch1_mixing_depth = 0.3
         self.nmb_branches_final = 9
         self.nmb_imgs_show = 5 # don't change
         self.fps = 30
-        self.duration = 10
+        self.duration_video = 15
+        self.t_compute_max_allowed = 15
         self.dict_multi_trans = {}
         self.dict_multi_trans_include = {}
         self.multi_trans_currently_shown = []
@@ -79,114 +88,87 @@ class BlendingFrontend():
             self.width = 768
         
         # make dummy image
+    def save_empty_image(self):
         self.fp_img_empty = 'empty.jpg'
         Image.fromarray(np.zeros((self.height, self.width, 3), dtype=np.uint8)).save(self.fp_img_empty, quality=5)
         
-    def change_depth_strength(self, value):
-        self.depth_strength = value
-        print(f"changed depth_strength to {value}")
-    
-    def change_num_inference_steps(self, value):
-        self.num_inference_steps = value
-        print(f"changed num_inference_steps to {value}")
-        
-    def change_guidance_scale(self, value):
-        self.guidance_scale = value
-        self.lb.set_guidance_scale(value)
-        print(f"changed guidance_scale to {value}")
-        
-    def change_guidance_scale_mid_damper(self, value):
-        self.guidance_scale_mid_damper = value
-        print(f"changed guidance_scale_mid_damper to {value}")
-        
-    def change_mid_compression_scaler(self, value):
-        self.mid_compression_scaler = value
-        print(f"changed mid_compression_scaler to {value}")
-        
-    def change_branch1_influence(self, value):
-        self.branch1_influence = value
-        print(f"changed branch1_influence to {value}")
-    
-    def change_height(self, value):
-        self.height = value
-        print(f"changed height to {value}")
-        
-    def change_width(self, value):
-        self.width = value
-        print(f"changed width to {value}")
-        
-    def change_nmb_branches_final(self, value):
-        self.nmb_branches_final  = value
-        print(f"changed nmb_branches_final to {value}")
-        
-    def change_duration(self, value):
-        self.duration  = value
-        print(f"changed duration to {value}")
-        
-    def change_fps(self, value):
-        self.fps  = value
-        print(f"changed fps to {value}")
-        
-    def change_negative_prompt(self, value):
-        self.negative_prompt = value
-        
-    def change_seed1(self, value):
-        self.seed1 = int(value)
-        
-    def change_seed2(self, value):
-        self.seed2 = int(value)
         
     def randomize_seed1(self):
         seed = np.random.randint(0, 10000000)
-        self.change_seed1(seed)
+        self.seed1 = int(seed)
         print(f"randomize_seed1: new seed = {self.seed1}")
         return seed
         
     def randomize_seed2(self):
         seed = np.random.randint(0, 10000000)
-        self.change_seed2(seed)
+        self.seed2 = int(seed)
         print(f"randomize_seed2: new seed = {self.seed2}")
         return seed
         
     
-    def compute_transition(self, prompt1, prompt2):
-        self.prompt1 = prompt1
-        self.prompt2 = prompt2
-        print("STARTING DIFFUSION!")
+    def setup_lb(self, list_ui_elem):
+        # Collect latent blending variables
         self.state_current = self.get_state_dict()
+        self.lb.set_width(list_ui_elem[list_ui_keys.index('width')])
+        self.lb.set_height(list_ui_elem[list_ui_keys.index('height')])
+        self.lb.set_prompt1(list_ui_elem[list_ui_keys.index('prompt1')])
+        self.lb.set_prompt2(list_ui_elem[list_ui_keys.index('prompt2')])
+        self.lb.set_negative_prompt(list_ui_elem[list_ui_keys.index('negative_prompt')])
+        self.lb.guidance_scale = list_ui_elem[list_ui_keys.index('guidance_scale')]
+        self.lb.guidance_scale_mid_damper = list_ui_elem[list_ui_keys.index('guidance_scale_mid_damper')]
+        self.lb.branch1_influence = list_ui_elem[list_ui_keys.index('branch1_influence')]
+        self.lb.branch1_mixing_depth = list_ui_elem[list_ui_keys.index('branch1_mixing_depth')]
+        self.lb.t_compute_max_allowed = list_ui_elem[list_ui_keys.index('duration_compute')]
+        self.lb.num_inference_steps = list_ui_elem[list_ui_keys.index('num_inference_steps')]
+        self.lb.sdh.num_inference_steps = list_ui_elem[list_ui_keys.index('num_inference_steps')]
+        self.duration_video = list_ui_elem[list_ui_keys.index('duration_video')]
+        self.lb.seed1 = list_ui_elem[list_ui_keys.index('seed1')]
+        self.lb.seed2 = list_ui_elem[list_ui_keys.index('seed2')]
+        
+    
+    def compute_img1(self, *args):
+        list_ui_elem = args
+        self.setup_lb(list_ui_elem)
+        fp_img1 = f"img1_{get_time('second')}.jpg"
+        img1 = Image.fromarray(self.lb.compute_latents1(return_image=True))
+        img1.save(fp_img1)
+        self.save_empty_image()
+        return [fp_img1, self.fp_img_empty, self.fp_img_empty, self.fp_img_empty, self.fp_img_empty]
+    
+    def compute_img2(self, *args):
+        list_ui_elem = args
+        self.setup_lb(list_ui_elem)
+        fp_img2 = f"img2_{get_time('second')}.jpg"
+        img2 = Image.fromarray(self.lb.compute_latents2(return_image=True))
+        img2.save(fp_img2)
+        return [self.fp_img_empty, self.fp_img_empty, self.fp_img_empty, fp_img2]
+        
+    def compute_transition(self, *args):
+        list_ui_elem = args
+        self.setup_lb(list_ui_elem)
+        print("STARTING DIFFUSION!")
         if self.use_debug:
             list_imgs = [(255*np.random.rand(self.height,self.width,3)).astype(np.uint8) for l in range(5)]
             list_imgs = [Image.fromarray(l) for l in list_imgs]
             print("DONE! SENDING BACK RESULTS")
             return list_imgs
         
-        # Collect latent blending variables
-        self.lb.set_width(self.width)
-        self.lb.set_height(self.height)
-        self.lb.autosetup_branching(
-                depth_strength = self.depth_strength,
-                num_inference_steps = self.num_inference_steps,
-                nmb_branches_final = self.nmb_branches_final,
-                nmb_mindist = 3)
-        self.lb.set_prompt1(self.prompt1)
-        self.lb.set_prompt2(self.prompt2)
-        self.lb.set_negative_prompt(self.negative_prompt)
-        
-        self.lb.guidance_scale = self.guidance_scale
-        self.lb.guidance_scale_mid_damper = self.guidance_scale_mid_damper
-        self.lb.mid_compression_scaler = self.mid_compression_scaler
-        self.lb.branch1_influence = self.branch1_influence
         fixed_seeds = [self.seed1, self.seed2]
         
         # Run Latent Blending
-        imgs_transition = self.lb.run_transition(fixed_seeds=fixed_seeds)
+        imgs_transition = self.lb.run_transition(
+            recycle_img1=True, 
+            recycle_img2=True, 
+            num_inference_steps=self.num_inference_steps, 
+            depth_strength=self.depth_strength, 
+            fixed_seeds=fixed_seeds
+            )
         print(f"Latent Blending pass finished. Resulted in {len(imgs_transition)} images")
         
-        # Subselect the preview images (hard fixed to self.nmb_imgs_show=5)
-        assert np.mod((self.nmb_branches_final-self.nmb_imgs_show)/4, 1)==0, 'self.nmb_branches_final illegal value!'
-        idx_list = np.linspace(0, self.nmb_branches_final-1, self.nmb_imgs_show).astype(np.int32)
+        # Subselect three preview images
+        idx_img_prev = np.round(np.linspace(0, len(imgs_transition)-1, 5)[1:-1]).astype(np.int32)
         list_imgs_preview = []
-        for j in idx_list:
+        for j in idx_img_prev:
             list_imgs_preview.append(Image.fromarray(imgs_transition[j]))
             
         # Save the preview imgs as jpgs on disk so we are not sending umcompressed data around
@@ -198,7 +180,7 @@ class BlendingFrontend():
             self.list_fp_imgs_current.append(fp_img)
         
         # Insert cheap frames for the movie
-        imgs_transition_ext = add_frames_linear_interp(imgs_transition, self.duration, self.fps)
+        imgs_transition_ext = add_frames_linear_interp(imgs_transition, self.duration_video, self.fps)
 
         # Save as movie
         fp_movie = self.get_fp_movie(self.current_timestamp)
@@ -330,35 +312,44 @@ if __name__ == "__main__":
     sdh = StableDiffusionHolder(fp_ckpt)
     
     self = BlendingFrontend(sdh) # Yes this is possible in python and yes it is an awesome trick
+    # self = BlendingFrontend(None) # Yes this is possible in python and yes it is an awesome trick
+    
+    dict_ui_elem = {}
     
     with gr.Blocks() as demo:
         with gr.Row():
             prompt1 = gr.Textbox(label="prompt 1")
-            prompt2 = gr.Textbox(label="prompt 2")
             negative_prompt = gr.Textbox(label="negative prompt")          
-            
+            prompt2 = gr.Textbox(label="prompt 2")
+        
         with gr.Row():
-            nmb_branches_final = gr.Slider(5, 125, self.nmb_branches_final, step=4, label='nmb trans images', interactive=True) 
+            duration_compute = gr.Slider(10, 40, self.duration_video, step=1, label='compute budget for transition (seconds)', interactive=True) 
+            duration_video = gr.Slider(0.1, 30, self.duration_video, step=0.1, label='result video duration (seconds)', interactive=True) 
             height = gr.Slider(256, 2048, self.height, step=128, label='height', interactive=True)
             width = gr.Slider(256, 2048, self.width, step=128, label='width', interactive=True) 
             
+        with gr.Accordion("Advanced Settings (click to expand)", open=False):
+
+            with gr.Row():
+                depth_strength = gr.Slider(0.01, 0.99, self.depth_strength, step=0.01, label='depth_strength', interactive=True) 
+                branch1_influence = gr.Slider(0.0, 1.0, self.branch1_influence, step=0.01, label='branch1_influence', interactive=True) 
+                branch1_mixing_depth = gr.Slider(0.0, 1.0, self.branch1_mixing_depth, step=0.01, label='branch1_mixing_depth', interactive=True) 
+
+            with gr.Row():
+                num_inference_steps = gr.Slider(5, 100, self.num_inference_steps, step=1, label='num_inference_steps', interactive=True)
+                guidance_scale = gr.Slider(1, 25, self.guidance_scale, step=0.1, label='guidance_scale', interactive=True) 
+                guidance_scale_mid_damper = gr.Slider(0.01, 2.0, self.guidance_scale_mid_damper, step=0.01, label='guidance_scale_mid_damper', interactive=True) 
+        
+            with gr.Row():
+                seed1 = gr.Number(420, label="seed 1", interactive=True)
+                b_newseed1 = gr.Button("randomize seed 1", variant='secondary')
+                seed2 = gr.Number(420, label="seed 2", interactive=True)
+                b_newseed2 = gr.Button("randomize seed 2", variant='secondary')
+                
         with gr.Row():
-            num_inference_steps = gr.Slider(5, 100, self.num_inference_steps, step=1, label='num_inference_steps', interactive=True)
-            branch1_influence = gr.Slider(0.0, 1.0, self.branch1_influence, step=0.01, label='branch1_influence', interactive=True) 
-            guidance_scale = gr.Slider(1, 25, self.guidance_scale, step=0.1, label='guidance_scale', interactive=True) 
-    
-        with gr.Row():
-            depth_strength = gr.Slider(0.01, 0.99, self.depth_strength, step=0.01, label='depth_strength', interactive=True) 
-            duration = gr.Slider(0.1, 30, self.duration, step=0.1, label='video duration', interactive=True) 
-            guidance_scale_mid_damper = gr.Slider(0.01, 2.0, self.guidance_scale_mid_damper, step=0.01, label='guidance_scale_mid_damper', interactive=True) 
-            
-        with gr.Row():
-            seed1 = gr.Number(42, label="seed 1", interactive=True)
-            b_newseed1 = gr.Button("randomize seed 1", variant='secondary')
-            seed2 = gr.Number(420, label="seed 2", interactive=True)
-            b_newseed2 = gr.Button("randomize seed 2", variant='secondary')
-        with gr.Row():
+            b_compute1 = gr.Button('compute first image', variant='primary')
             b_compute_transition = gr.Button('compute transition', variant='primary')
+            b_compute2 = gr.Button('compute last image', variant='primary')
         
         with gr.Row():
             img1 = gr.Image(label="1/5")
@@ -370,31 +361,40 @@ if __name__ == "__main__":
         with gr.Row():
             vid_transition = gr.Video()
         
-        # Bind the on-change methods
-        depth_strength.change(fn=self.change_depth_strength, inputs=depth_strength)
-        num_inference_steps.change(fn=self.change_num_inference_steps, inputs=num_inference_steps)
-        nmb_branches_final.change(fn=self.change_nmb_branches_final, inputs=nmb_branches_final)
+        # Collect all UI elemts in list to easily pass as inputs
+        dict_ui_elem["prompt1"] = prompt1
+        dict_ui_elem["negative_prompt"] = negative_prompt
+        dict_ui_elem["prompt2"] = prompt2
+         
+        dict_ui_elem["duration_compute"] = duration_compute
+        dict_ui_elem["duration_video"] = duration_video
+        dict_ui_elem["height"] = height
+        dict_ui_elem["width"] = width
+         
+        dict_ui_elem["depth_strength"] = depth_strength
+        dict_ui_elem["branch1_influence"] = branch1_influence
+        dict_ui_elem["branch1_mixing_depth"] = branch1_mixing_depth
         
-        guidance_scale.change(fn=self.change_guidance_scale, inputs=guidance_scale)
-        guidance_scale_mid_damper.change(fn=self.change_guidance_scale_mid_damper, inputs=guidance_scale_mid_damper)
+        dict_ui_elem["num_inference_steps"] = num_inference_steps
+        dict_ui_elem["guidance_scale"] = guidance_scale
+        dict_ui_elem["guidance_scale_mid_damper"] = guidance_scale_mid_damper
+        dict_ui_elem["seed1"] = seed1
+        dict_ui_elem["seed2"] = seed2
         
-        height.change(fn=self.change_height, inputs=height)
-        width.change(fn=self.change_width, inputs=width)
-        negative_prompt.change(fn=self.change_negative_prompt, inputs=negative_prompt)
-        seed1.change(fn=self.change_seed1, inputs=seed1)
-        seed2.change(fn=self.change_seed2, inputs=seed2)
-        duration.change(fn=self.change_duration, inputs=duration)
-        branch1_influence.change(fn=self.change_branch1_influence, inputs=branch1_influence)
-    
+        # Convert to list, as gradio doesn't seem to accept dicts
+        list_ui_elem = []
+        list_ui_keys = []
+        for k in dict_ui_elem.keys():
+            list_ui_elem.append(dict_ui_elem[k])
+            list_ui_keys.append(k)
+        self.list_ui_keys = list_ui_keys
+        
         b_newseed1.click(self.randomize_seed1, outputs=seed1)
         b_newseed2.click(self.randomize_seed2, outputs=seed2)
-        # b_stackforward.click(self.stack_forward, 
-        #                      inputs=[prompt2, seed2], 
-        #                      outputs=[img1, img2, img3, img4, img5, prompt1, seed1, prompt2])
+        b_compute1.click(self.compute_img1, inputs=list_ui_elem, outputs=[img1, img2, img3, img4, img5])
+        b_compute2.click(self.compute_img2, inputs=list_ui_elem, outputs=[img2, img3, img4, img5])
         b_compute_transition.click(self.compute_transition, 
-                                   inputs=[prompt1, prompt2],
-                                   outputs=[img1, img2, img3, img4, img5, vid_transition])
+                                    inputs=list_ui_elem,
+                                    outputs=[img2, img3, img4, vid_transition])
         
-
-
     demo.launch(share=self.share, inbrowser=True, inline=False)

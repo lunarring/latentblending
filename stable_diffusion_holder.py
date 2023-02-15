@@ -42,7 +42,6 @@ from contextlib import nullcontext
 from ldm.util import instantiate_from_config
 from ldm.models.diffusion.ddim import DDIMSampler
 from einops import repeat, rearrange
-
 #%%
 
 
@@ -279,24 +278,33 @@ class StableDiffusionHolder:
     def run_diffusion_standard(
             self, 
             text_embeddings: torch.FloatTensor, 
-            latents_for_injection: torch.FloatTensor = None, 
+            latents_for_injection = None, 
             idx_start: int = -1, 
             idx_stop: int = -1, 
-            return_image: Optional[bool] = False
+            seed_source: int = -1,
+            seed_mixing_target: int = -1,
+            mixing_coeff: float = 0.0,
+            return_image: Optional[bool] = False,
         ):
         r"""
         Wrapper function for run_diffusion_standard and run_diffusion_inpaint.
         Depending on the mode, the correct one will be executed.
         
         Args:
-            text_embeddings: torch.FloatTensor
+            text_embeddings: torch.FloatTensor 
                 Text embeddings used for diffusion
-            latents_for_injection: torch.FloatTensor 
+            latents_for_injection: torch.FloatTensor or list
                 Latents that are used for injection
             idx_start: int
                 Index of the diffusion process start and where the latents_for_injection are injected
             idx_stop: int
                 Index of the diffusion process end.
+            mixing_coeff:
+                # FIXME
+            seed_source:
+                # FIXME
+            seed_mixing:
+                # FIXME
             return_image: Optional[bool]
                 Optionally return image directly
         """
@@ -304,12 +312,19 @@ class StableDiffusionHolder:
         
         if latents_for_injection is None:
             do_inject_latents = False
+            do_mix_latents = False
         else:
-            do_inject_latents = True    
+            if mixing_coeff > 0.0:
+                do_inject_latents = False
+                do_mix_latents = True
+                assert seed_mixing_target != -1, "Set to correct seed for mixing"
+            else:
+                do_inject_latents = True    
+                do_mix_latents = False
         
         
         precision_scope = autocast if self.precision == "autocast" else nullcontext
-        generator = torch.Generator(device=self.device).manual_seed(int(self.seed))
+        generator = torch.Generator(device=self.device).manual_seed(int(seed_source))
         
         with precision_scope("cuda"):
             with self.model.ema_scope():
@@ -340,6 +355,16 @@ class StableDiffusionHolder:
                             continue
                         elif i == idx_start:
                             latents = latents_for_injection.clone()
+                    if do_mix_latents:
+                        if i == 0:
+                            generator = torch.Generator(device=self.device).manual_seed(int(seed_mixing_target))
+                            latents_mixtarget = torch.randn(size, generator=generator, device=self.device)
+                        if i < idx_start:
+                            latents_mixtarget = latents_for_injection[i-1].clone()
+                        latents = interpolate_spherical(latents, latents_mixtarget, mixing_coeff)
+                        
+                        if i == idx_start:
+                            do_mix_latents = False
                     
                     if i == idx_stop:
                         return list_latents_out
@@ -575,6 +600,50 @@ class StableDiffusionHolder:
         x_sample = 255 * x_sample[0,:,:].permute([1,2,0]).cpu().numpy()
         image = x_sample.astype(np.uint8)
         return image
+
+@torch.no_grad()
+def interpolate_spherical(p0, p1, fract_mixing: float):
+    r"""
+    Helper function to correctly mix two random variables using spherical interpolation.
+    See https://en.wikipedia.org/wiki/Slerp
+    The function will always cast up to float64 for sake of extra 4.
+    Args:
+        p0: 
+            First tensor for interpolation
+        p1: 
+            Second tensor for interpolation
+        fract_mixing: float 
+            Mixing coefficient of interval [0, 1]. 
+            0 will return in p0
+            1 will return in p1
+            0.x will return a mix between both preserving angular velocity.
+    """ 
+    
+    if p0.dtype == torch.float16:
+        recast_to = 'fp16'
+    else:
+        recast_to = 'fp32'
+    
+    p0 = p0.double()
+    p1 = p1.double()
+    norm = torch.linalg.norm(p0) * torch.linalg.norm(p1)
+    epsilon = 1e-7
+    dot = torch.sum(p0 * p1) / norm
+    dot = dot.clamp(-1+epsilon, 1-epsilon)
+    
+    theta_0 = torch.arccos(dot)
+    sin_theta_0 = torch.sin(theta_0)
+    theta_t = theta_0 * fract_mixing
+    s0 = torch.sin(theta_0 - theta_t) / sin_theta_0
+    s1 = torch.sin(theta_t) / sin_theta_0
+    interp = p0*s0 + p1*s1
+    
+    if recast_to == 'fp16':
+        interp = interp.half()
+    elif recast_to == 'fp32':
+        interp = interp.float()
+        
+    return interp
 
 
 if __name__ == "__main__":
