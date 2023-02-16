@@ -107,8 +107,16 @@ class LatentBlending():
         self.noise_level_upscaling = 20
         self.list_injection_idx = None
         self.list_nmb_branches = None
+        
+        # Mixing parameters
         self.branch1_influence = 0.0
-        self.branch1_mixing_depth = 0.65
+        self.branch1_max_depth_influence = 0.65
+        self.branch1_influence_decay = 0.8
+        
+        self.parental_influence = 0.0
+        self.parental_max_depth_influence = 1.0
+        self.parental_influence_decay = 1.0    
+        
         self.branch1_insertion_completed = False
         self.set_guidance_scale(guidance_scale)
         self.init_mode()
@@ -389,10 +397,6 @@ class LatentBlending():
             fixed_seeds: Optional[List[int]] = None,
         ):
         
-        # # FIXME: deal with these tree args later
-        # self.num_inference_steps = 30
-        # self.t_compute_max_allowed = 60
-        
         # Sanity checks first
         assert self.text_embedding1 is not None, 'Set the first text embedding with .set_prompt1(...) before'
         assert self.text_embedding2 is not None, 'Set the second text embedding with .set_prompt2(...) before'
@@ -411,17 +415,15 @@ class LatentBlending():
         self.sdh.num_inference_steps = self.num_inference_steps
         
         # Compute / Recycle first image
-        if not recycle_img1:
+        if not recycle_img1 or len(self.tree_latents[0]) != self.num_inference_steps:
             list_latents1 = self.compute_latents1()
         else:
-            # FIXME: check if latents there...
             list_latents1 = self.tree_latents[0]
             
         # Compute / Recycle first image
-        if not recycle_img2:
+        if not recycle_img2 or len(self.tree_latents[-1]) != self.num_inference_steps:
             list_latents2 = self.compute_latents2()
         else:
-            # FIXME: check if latents there...
             list_latents2 = self.tree_latents[-1]
             
         # Reset the tree, injecting the edge latents1/2 we just generated/recycled
@@ -438,7 +440,7 @@ class LatentBlending():
         while t_compute < self.t_compute_max_allowed:
             list_compute_steps = self.num_inference_steps - list_idx_injection
             list_compute_steps *= list_nmb_stems
-            t_compute = np.sum(list_compute_steps) * self.dt_per_diff
+            t_compute = np.sum(list_compute_steps) * self.dt_per_diff  + 0.15*np.sum(list_nmb_stems)
             increase_done = False
             for s_idx in range(len(list_nmb_stems)-1):
                 if list_nmb_stems[s_idx+1] / list_nmb_stems[s_idx] >= 2:
@@ -449,13 +451,14 @@ class LatentBlending():
                 list_nmb_stems[-1] += 1
             # print(f"t_compute {t_compute} list_nmb_stems {list_nmb_stems}")
             
-        # Run iteratively
+        # Run iteratively, always inserting new branches where they are needed most
         for s_idx in tqdm(range(len(list_idx_injection))):
             nmb_stems = list_nmb_stems[s_idx]
             idx_injection = list_idx_injection[s_idx]
             
             for i in range(nmb_stems):
                 fract_mixing, b_parent1, b_parent2 = self.get_mixing_parameters(idx_injection)
+                self.set_guidance_mid_dampening(fract_mixing)
                 # print(f"fract_mixing: {fract_mixing} idx_injection {idx_injection}")
                 list_latents = self.compute_latents_mix(fract_mixing, b_parent1, b_parent2, idx_injection)
                 self.insert_into_tree(fract_mixing, idx_injection, list_latents)
@@ -465,6 +468,14 @@ class LatentBlending():
 
 
     def get_mixing_parameters(self, idx_injection):
+        r"""
+        Computes which parental latents should be mixed together to achieve a smooth blend.
+        As metric, we are using lpips image similarity. The insertion takes place
+        where the metric is maximal.
+        Args:
+            idx_injection: int
+                the index in terms of diffusion steps, where the next insertion will start.
+        """
         # get_lpips_similarity
         similarities = []
         for i in range(len(self.tree_final_imgs)-1):
@@ -499,7 +510,16 @@ class LatentBlending():
         
      
     def insert_into_tree(self, fract_mixing, idx_injection, list_latents):
-        # FIXME
+        r"""
+        Inserts all necessary parameters into the trajectory tree.
+        Args:
+            fract_mixing: float
+                the fraction along the transition axis [0, 1]
+            idx_injection: int
+                the index in terms of diffusion steps, where the next insertion will start.
+            list_latents: list
+                list of the latents to be inserted
+        """
         b_parent1, b_parent2 = get_closest_idx(fract_mixing, self.tree_fracts)
         self.tree_latents.insert(b_parent1+1, list_latents)
         self.tree_final_imgs.insert(b_parent1+1, self.sdh.latent2image(list_latents[-1]))
@@ -508,23 +528,67 @@ class LatentBlending():
         
         
     def compute_latents_mix(self, fract_mixing, b_parent1, b_parent2, idx_injection):    
-        # FIXME
+        r"""
+        Runs a diffusion trajectory, using the latents from the respective parents
+        Args:
+            fract_mixing: float
+                the fraction along the transition axis [0, 1]
+            b_parent1: int
+                index of parent1 to be used
+            b_parent2: int
+                index of parent2 to be used
+            idx_injection: int
+                the index in terms of diffusion steps, where the next insertion will start.
+        """
         list_conditionings = self.get_mixed_conditioning(fract_mixing)
         fract_mixing_parental = (fract_mixing - self.tree_fracts[b_parent1]) / (self.tree_fracts[b_parent2] - self.tree_fracts[b_parent1]) 
-        idx_reversed = self.num_inference_steps - idx_injection
-        latents_for_injection = interpolate_spherical(
-            self.tree_latents[b_parent1][-idx_reversed-1], 
-            self.tree_latents[b_parent2][-idx_reversed-1], 
-            fract_mixing_parental)
-        list_latents = self.run_diffusion(list_conditionings, latents_for_injection=latents_for_injection, idx_start=idx_injection)
+        # idx_reversed = self.num_inference_steps - idx_injection
+        
+        list_latents_parental_mix = []
+        for i in range(self.num_inference_steps):
+            latents_p1 = self.tree_latents[b_parent1][i]
+            latents_p2 = self.tree_latents[b_parent2][i]
+            if latents_p1 is None or latents_p2 is None:
+                latents_parental = None
+            else:
+                latents_parental = interpolate_spherical(latents_p1, latents_p2, fract_mixing_parental)
+            list_latents_parental_mix.append(latents_parental)
+
+        idx_mixing_stop = int(round(self.num_inference_steps*self.parental_max_depth_influence))
+        mixing_coeffs = idx_injection*[self.parental_influence]
+        nmb_mixing = idx_mixing_stop - idx_injection
+        if nmb_mixing > 0:
+            mixing_coeffs.extend(list(np.linspace(self.parental_influence, self.parental_influence*self.parental_influence_decay, nmb_mixing)))     
+        mixing_coeffs.extend((self.num_inference_steps-len(mixing_coeffs))*[0])
+        
+        latents_start = list_latents_parental_mix[idx_injection-1]
+        list_latents = self.run_diffusion(
+            list_conditionings, 
+            latents_start = latents_start,
+            idx_start = idx_injection,
+            list_latents_mixing = list_latents_parental_mix,
+            mixing_coeffs = mixing_coeffs
+            )
+        
         return list_latents
             
         
     def compute_latents1(self, return_image=False):
+        r"""
+        Runs a diffusion trajectory for the first image
+        Args:
+            return_image: bool
+                whether to return an image or the list of latents
+        """
         print("starting compute_latents1")
         list_conditionings = [self.text_embedding1]
         t0 = time.time()
-        list_latents1 = self.run_diffusion(list_conditionings, seed_source=self.seed1)
+        latents_start = self.get_noise(self.seed1)
+        list_latents1 = self.run_diffusion(
+            list_conditionings, 
+            latents_start = latents_start,
+            idx_start = 0
+            )
         t1 = time.time()
         self.dt_per_diff = (t1-t0) / self.num_inference_steps
         self.tree_latents[0] = list_latents1
@@ -533,25 +597,31 @@ class LatentBlending():
         else:
             return list_latents1
     
-        
     def compute_latents2(self, return_image=False):
-        print("starting compute_latents2")
-        list_conditionings = [self.text_embedding2
-                              ]
+        r"""
+        Runs a diffusion trajectory for the last image, which may be affected by the first image's trajectory.
+        Args:
+            return_image: bool
+                whether to return an image or the list of latents
+        """
+        list_conditionings = [self.text_embedding2]
+        latents_start = self.get_noise(self.seed2)
         # Influence from branch1
         if self.branch1_influence > 0.0:
-            self.branch1_influence = np.clip(self.branch1_influence, 0, 1)
-            self.branch1_mixing_depth = np.clip(self.branch1_mixing_depth, 0, 1)
-            idx_crossfeed = int(round(self.num_inference_steps*self.branch1_mixing_depth))
+            # Set up the mixing_coeffs
+            idx_mixing_stop = int(round(self.num_inference_steps*self.branch1_max_depth_influence))
+            mixing_coeffs = list(np.linspace(self.branch1_influence, self.branch1_influence*self.branch1_influence_decay, idx_mixing_stop))     
+            mixing_coeffs.extend((self.num_inference_steps-idx_mixing_stop)*[0])
+            list_latents_mixing = self.tree_latents[0]
             list_latents2 = self.run_diffusion(
                 list_conditionings, 
-                idx_start=idx_crossfeed,
-                latents_for_injection=self.tree_latents[0],
-                seed_source=self.seed2,
-                seed_mixing_target=self.seed1,
-                mixing_coeff=self.branch1_influence)
+                latents_start = latents_start,
+                idx_start = 0,
+                list_latents_mixing = list_latents_mixing,
+                mixing_coeffs = mixing_coeffs
+                )
         else:
-            list_latents2 = self.run_diffusion(list_conditionings)
+            list_latents2 = self.run_diffusion(list_conditionings, latents_start)
         self.tree_latents[-1] = list_latents2
         
         if return_image:
@@ -559,9 +629,14 @@ class LatentBlending():
         else:
             return list_latents2
         
+    def get_noise(self, seed):
+        generator = torch.Generator(device=self.sdh.device).manual_seed(int(seed))
+        shape_latents = [self.sdh.C, self.sdh.height // self.sdh.f, self.sdh.width // self.sdh.f]
+        C, H, W = shape_latents
+        return torch.randn((1, C, H, W), generator=generator, device=self.sdh.device)
+        
     
-    
-    def run_transition_OLD(
+    def run_transition_legacy(
             self, 
             recycle_img1: Optional[bool] = False, 
             recycle_img2: Optional[bool] = False, 
@@ -569,6 +644,7 @@ class LatentBlending():
             premature_stop: Optional[int] = np.inf,
         ):
         r"""
+        Old legacy function for computing transitions.
         Returns a list of transition images using spherical latent blending.
         Args:
             recycle_img1: Optional[bool]:
@@ -610,9 +686,9 @@ class LatentBlending():
         if self.branch1_influence > 0.0 and not self.branch1_insertion_completed:
             assert self.list_nmb_branches[0]==2, 'branch1 influnce currently requires the self.list_nmb_branches[0] = 0'
             self.branch1_influence = np.clip(self.branch1_influence, 0, 1)
-            self.branch1_mixing_depth = np.clip(self.branch1_mixing_depth, 0, 1)
+            self.branch1_max_depth_influence = np.clip(self.branch1_max_depth_influence, 0, 1)
             self.list_nmb_branches.insert(1, 2)
-            idx_crossfeed = int(round(self.list_injection_idx[1]*self.branch1_mixing_depth))
+            idx_crossfeed = int(round(self.list_injection_idx[1]*self.branch1_max_depth_influence))
             self.list_injection_idx_ext.insert(1, idx_crossfeed)
             self.tree_fracts.insert(1, self.tree_fracts[0])
             self.tree_status.insert(1, self.tree_status[0])
@@ -790,27 +866,27 @@ class LatentBlending():
     def run_diffusion(
             self, 
             list_conditionings, 
-            latents_for_injection: torch.FloatTensor = None, 
-            idx_start: int = -1, 
-            idx_stop: int = -1, 
-            seed_source: int = -1,
-            seed_mixing_target: int = -1,
-            mixing_coeff: float = 0.0,
+            latents_start: torch.FloatTensor = None, 
+            idx_start: int = 0, 
+            list_latents_mixing = None, 
+            mixing_coeffs = 0.0,
             return_image: Optional[bool] = False
         ):
+        
         r"""
-        Wrapper function for run_diffusion_standard and run_diffusion_inpaint.
+        Wrapper function for diffusion runners.
         Depending on the mode, the correct one will be executed.
         
         Args:
             list_conditionings: List of all conditionings for the diffusion model.
-            latents_for_injection: torch.FloatTensor 
+            latents_start: torch.FloatTensor 
                 Latents that are used for injection
             idx_start: int
                 Index of the diffusion process start and where the latents_for_injection are injected
-            idx_stop: int
-                Index of the diffusion process end.
-            FIXME ARGS
+            list_latents_mixing: torch.FloatTensor 
+                List of latents (latent trajectories) that are used for mixing
+            mixing_coeffs: float or list
+                Coefficients, how strong each element of list_latents_mixing will be mixed in.
             return_image: Optional[bool]
                 Optionally return image directly
         """
@@ -822,26 +898,25 @@ class LatentBlending():
         if self.mode == 'standard':
             text_embeddings = list_conditionings[0]
             return self.sdh.run_diffusion_standard(
-                text_embeddings, 
-                latents_for_injection=latents_for_injection, 
-                idx_start=idx_start, 
-                idx_stop=idx_stop,
-                seed_source=seed_source,
-                seed_mixing_target=seed_mixing_target,
-                mixing_coeff=mixing_coeff,
-                return_image=return_image,
+                text_embeddings = text_embeddings,
+                latents_start = latents_start,
+                idx_start = idx_start,
+                list_latents_mixing = list_latents_mixing,
+                mixing_coeffs = mixing_coeffs,
+                return_image = return_image,
                 )
         
-        elif self.mode == 'inpaint':
-            text_embeddings = list_conditionings[0]
-            assert self.sdh.image_source is not None, "image_source is None. Please run init_inpainting first."
-            assert self.sdh.mask_image is not None, "image_source is None. Please run init_inpainting first."
-            return self.sdh.run_diffusion_inpaint(text_embeddings, latents_for_injection=latents_for_injection, idx_start=idx_start, idx_stop=idx_stop, return_image=return_image)
-        # FIXME LONG LINE
-        elif self.mode == 'upscale':
-            cond = list_conditionings[0]
-            uc_full = list_conditionings[1]
-            return self.sdh.run_diffusion_upscaling(cond, uc_full, latents_for_injection=latents_for_injection, idx_start=idx_start, idx_stop=idx_stop, return_image=return_image)
+        # elif self.mode == 'inpaint':
+        #     text_embeddings = list_conditionings[0]
+        #     assert self.sdh.image_source is not None, "image_source is None. Please run init_inpainting first."
+        #     assert self.sdh.mask_image is not None, "image_source is None. Please run init_inpainting first."
+        #     return self.sdh.run_diffusion_inpaint(text_embeddings, latents_for_injection=latents_for_injection, idx_start=idx_start, idx_stop=idx_stop, return_image=return_image)
+        
+        # # FIXME LONG LINE and bad args
+        # elif self.mode == 'upscale':
+        #     cond = list_conditionings[0]
+        #     uc_full = list_conditionings[1]
+        #     return self.sdh.run_diffusion_upscaling(cond, uc_full, latents_for_injection=latents_for_injection, idx_start=idx_start, idx_stop=idx_stop, return_image=return_image)
 
     def run_upscaling_step1(
             self, 
@@ -1100,7 +1175,11 @@ class LatentBlending():
         
         
     def get_lpips_similarity(self, imgA, imgB):
-        # FIXME
+        r"""
+        Computes the image similarity between two images imgA and imgB. 
+        Used to determine the optimal point of insertion to create smooth transitions.
+        High values indicate low similarity.
+        """ 
         tensorA = torch.from_numpy(imgA).float().cuda(self.device)
         tensorA = 2*tensorA/255.0 - 1
         tensorA = tensorA.permute([2,0,1]).unsqueeze(0)
@@ -1406,55 +1485,24 @@ if __name__ == "__main__":
     
     # Run latent blending
     self.branch1_influence = 0.3
-    self.branch1_mixing_depth = 0.4
-    self.run_transition(depth_strength=depth_strength, fixed_seeds=fixed_seeds)
-    #%%
-    self.branch1_influence = 0.3
-    self.branch1_mixing_depth = 0.5
-    img2 = self.compute_latents2(return_image=True)
-    Image.fromarray(img2)
+    self.branch1_max_depth_influence = 0.4
+    # self.run_transition(depth_strength=depth_strength, fixed_seeds=fixed_seeds)
+    self.seed1=21312
+    img1 =self.compute_latents1(True)
+    #%
+    self.seed2=1234121
+    self.branch1_influence = 0.7
+    self.branch1_max_depth_influence = 0.3
+    self.branch1_influence_decay = 0.3
+    img2 =self.compute_latents2(True)
+    # Image.fromarray(np.concatenate((img1, img2), axis=1))
     
     #%%
-    idx_injection = 15
-    fract_mixing = 0.5
-    list_conditionings = self.get_mixed_conditioning(fract_mixing)
-    latents_for_injection = interpolate_spherical(self.tree_latents[0][idx_injection], self.tree_latents[-1][idx_injection], fract_mixing)
-    list_latents = self.run_diffusion(list_conditionings, latents_for_injection=latents_for_injection, idx_start=idx_injection)
-    img_mix = self.sdh.latent2image((list_latents[-1]))
-    
-    Image.fromarray(np.concatenate((img1,img_mix,img2), axis=1)).resize((800,800//3))
-    
-    #%% scheme
-    # init scheme
-    list_idx_injection = np.arange(idx_injection_base, self.num_inference_steps-1, 2)
-    list_nmb_stems = np.ones(len(list_idx_injection), dtype=np.int32)
-    
-    #%% 
-    list_compute_steps = self.num_inference_steps - list_idx_injection
-    list_compute_steps *= list_nmb_stems
-    t_compute = np.sum(list_compute_steps) * self.dt_per_diff
-    increase_done = False
-    for s_idx in range(len(list_nmb_stems)-1):
-        if list_nmb_stems[s_idx+1] / list_nmb_stems[s_idx] >= 3:
-            list_nmb_stems[s_idx] += 1
-            increase_done = True
-            break
-    if not increase_done:
-        list_nmb_stems[-1] += 1
-    print(f"t_compute {t_compute} list_nmb_stems {list_nmb_stems}")
-    
-    
-    #%%
-    
-    imgs_transition = self.tree_final_imgs
-    # Let's get more cheap frames via linear interpolation (duration_transition*fps frames)
-    imgs_transition_ext = add_frames_linear_interp(imgs_transition, 15, fps)
-    
-    # Save as MP4
-    fp_movie = "test.mp4"
-    if os.path.isfile(fp_movie):
-        os.remove(fp_movie)
-    ms = MovieSaver(fp_movie, fps=fps, shape_hw=[sdh.height, sdh.width])
-    for img in tqdm(imgs_transition_ext):
-        ms.write_frame(img)
-    ms.finalize()
+    t0  = time.time()
+    self.t_compute_max_allowed = 30
+    self.parental_max_depth_influence = 1.0
+    self.parental_influence = 0.0
+    self.parental_influence_decay = 1.0    
+    imgs_transition = self.run_transition(recycle_img1=True, recycle_img2=True)
+    t1 = time.time()
+    print(f"took: {t1-t0}s")

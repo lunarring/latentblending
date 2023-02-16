@@ -278,12 +278,10 @@ class StableDiffusionHolder:
     def run_diffusion_standard(
             self, 
             text_embeddings: torch.FloatTensor, 
-            latents_for_injection = None, 
-            idx_start: int = -1, 
-            idx_stop: int = -1, 
-            seed_source: int = -1,
-            seed_mixing_target: int = -1,
-            mixing_coeff: float = 0.0,
+            latents_start: torch.FloatTensor,
+            idx_start: int = 0, 
+            list_latents_mixing = None, 
+            mixing_coeffs = 0.0,
             return_image: Optional[bool] = False,
         ):
         r"""
@@ -297,34 +295,26 @@ class StableDiffusionHolder:
                 Latents that are used for injection
             idx_start: int
                 Index of the diffusion process start and where the latents_for_injection are injected
-            idx_stop: int
-                Index of the diffusion process end.
             mixing_coeff:
-                # FIXME
-            seed_source:
-                # FIXME
-            seed_mixing:
                 # FIXME
             return_image: Optional[bool]
                 Optionally return image directly
+            
         """
  
-        
-        if latents_for_injection is None:
-            do_inject_latents = False
-            do_mix_latents = False
+        # Asserts
+        if type(mixing_coeffs) == float:
+            list_mixing_coeffs = self.num_inference_steps*[mixing_coeffs]
+        elif type(mixing_coeffs) == list:
+            assert len(mixing_coeffs) == self.num_inference_steps
+            list_mixing_coeffs = mixing_coeffs
         else:
-            if mixing_coeff > 0.0:
-                do_inject_latents = False
-                do_mix_latents = True
-                assert seed_mixing_target != -1, "Set to correct seed for mixing"
-            else:
-                do_inject_latents = True    
-                do_mix_latents = False
+            raise ValueError("mixing_coeffs should be float or list with len=num_inference_steps")
         
+        if np.sum(list_mixing_coeffs) > 0:
+            assert len(list_latents_mixing) == self.num_inference_steps
         
         precision_scope = autocast if self.precision == "autocast" else nullcontext
-        generator = torch.Generator(device=self.device).manual_seed(int(seed_source))
         
         with precision_scope("cuda"):
             with self.model.ema_scope():
@@ -332,14 +322,10 @@ class StableDiffusionHolder:
                     uc = self.model.get_learned_conditioning(self.negative_prompt)
                 else:
                     uc = None
-                shape_latents = [self.C, self.height // self.f, self.width // self.f]
     
                 self.sampler.make_schedule(ddim_num_steps=self.num_inference_steps-1, ddim_eta=self.ddim_eta, verbose=False)
-                C, H, W = shape_latents
-                size = (1, C, H, W)
-                b = size[0]
                 
-                latents = torch.randn(size, generator=generator, device=self.device)
+                latents = latents_start.clone()
     
                 timesteps = self.sampler.ddim_timesteps
     
@@ -349,29 +335,20 @@ class StableDiffusionHolder:
                 # collect latents
                 list_latents_out = []
                 for i, step in enumerate(time_range):
-                    if do_inject_latents:
-                        # Inject latent at right place
-                        if i < idx_start:
-                            continue
-                        elif i == idx_start:
-                            latents = latents_for_injection.clone()
-                    if do_mix_latents:
-                        if i == 0:
-                            generator = torch.Generator(device=self.device).manual_seed(int(seed_mixing_target))
-                            latents_mixtarget = torch.randn(size, generator=generator, device=self.device)
-                        if i < idx_start:
-                            latents_mixtarget = latents_for_injection[i-1].clone()
-                        latents = interpolate_spherical(latents, latents_mixtarget, mixing_coeff)
-                        
-                        if i == idx_start:
-                            do_mix_latents = False
+                    # Set the right starting latents
+                    if i < idx_start:
+                        list_latents_out.append(None)
+                        continue
+                    elif i == idx_start:
+                        latents = latents_start.clone()
+                            
+                    # Mix the latents. 
+                    if i > 0 and list_mixing_coeffs[i]>0:
+                        latents_mixtarget = list_latents_mixing[i-1].clone()
+                        latents = interpolate_spherical(latents, latents_mixtarget, list_mixing_coeffs[i])
                     
-                    if i == idx_stop:
-                        return list_latents_out
-                    
-                    # print(f"diffusion iter {i}")
                     index = total_steps - i - 1
-                    ts = torch.full((b,), step, device=self.device, dtype=torch.long)
+                    ts = torch.full((1,), step, device=self.device, dtype=torch.long)
                     outs = self.sampler.p_sample_ddim(latents, text_embeddings, ts, index=index, use_original_steps=False,
                                               quantize_denoised=False, temperature=1.0,
                                               noise_dropout=0.0, score_corrector=None,

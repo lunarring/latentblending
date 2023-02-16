@@ -31,15 +31,9 @@ from stable_diffusion_holder import StableDiffusionHolder
 torch.set_grad_enabled(False)
 import gradio as gr
 import copy
+from dotenv import find_dotenv, load_dotenv
 
 
-"""
-TODOS:
-    - clean parameter handling
-    - three buttons: diffuse A, diffuse B, make transition
-    - collapse for easy mode
-    - transition quality in terms of render time
-"""
 
 #%%
 
@@ -65,13 +59,17 @@ class BlendingFrontend():
         self.list_settings = []
         self.state_current = {}
         self.showing_current = True
-        self.branch1_influence = 0.1
-        self.branch1_mixing_depth = 0.3
+        self.branch1_influence = 0.3
+        self.branch1_max_depth_influence = 0.6
+        self.branch1_influence_decay = 0.3
+        self.parental_influence = 0.1
+        self.parental_max_depth_influence = 1.0
+        self.parental_influence_decay = 1.0    
         self.nmb_branches_final = 9
         self.nmb_imgs_show = 5 # don't change
         self.fps = 30
-        self.duration_video = 15
-        self.t_compute_max_allowed = 15
+        self.duration_video = 10
+        self.t_compute_max_allowed = 10
         self.dict_multi_trans = {}
         self.dict_multi_trans_include = {}
         self.multi_trans_currently_shown = []
@@ -86,10 +84,21 @@ class BlendingFrontend():
         else:
             self.height = 768
             self.width = 768
+            
+        self.init_save_dir()
+        
+        
+    def init_save_dir(self):
+        load_dotenv(find_dotenv(), verbose=False) 
+        try:
+            self.dp_out = os.getenv("dp_out")
+        except Exception as e:
+            self.dp_out = ""
+        
         
         # make dummy image
     def save_empty_image(self):
-        self.fp_img_empty = 'empty.jpg'
+        self.fp_img_empty = os.path.join(self.dp_out, 'empty.jpg')
         Image.fromarray(np.zeros((self.height, self.width, 3), dtype=np.uint8)).save(self.fp_img_empty, quality=5)
         
         
@@ -116,8 +125,6 @@ class BlendingFrontend():
         self.lb.set_negative_prompt(list_ui_elem[list_ui_keys.index('negative_prompt')])
         self.lb.guidance_scale = list_ui_elem[list_ui_keys.index('guidance_scale')]
         self.lb.guidance_scale_mid_damper = list_ui_elem[list_ui_keys.index('guidance_scale_mid_damper')]
-        self.lb.branch1_influence = list_ui_elem[list_ui_keys.index('branch1_influence')]
-        self.lb.branch1_mixing_depth = list_ui_elem[list_ui_keys.index('branch1_mixing_depth')]
         self.lb.t_compute_max_allowed = list_ui_elem[list_ui_keys.index('duration_compute')]
         self.lb.num_inference_steps = list_ui_elem[list_ui_keys.index('num_inference_steps')]
         self.lb.sdh.num_inference_steps = list_ui_elem[list_ui_keys.index('num_inference_steps')]
@@ -125,11 +132,19 @@ class BlendingFrontend():
         self.lb.seed1 = list_ui_elem[list_ui_keys.index('seed1')]
         self.lb.seed2 = list_ui_elem[list_ui_keys.index('seed2')]
         
+        self.lb.branch1_influence = list_ui_elem[list_ui_keys.index('branch1_influence')]
+        self.lb.branch1_max_depth_influence = list_ui_elem[list_ui_keys.index('branch1_max_depth_influence')]
+        self.lb.branch1_influence_decay = list_ui_elem[list_ui_keys.index('branch1_influence_decay')]
+        self.lb.parental_influence = list_ui_elem[list_ui_keys.index('parental_influence')]
+        self.lb.parental_max_depth_influence = list_ui_elem[list_ui_keys.index('parental_max_depth_influence')]
+        self.lb.parental_influence_decay = list_ui_elem[list_ui_keys.index('parental_influence_decay')]
+        
+        
     
     def compute_img1(self, *args):
         list_ui_elem = args
         self.setup_lb(list_ui_elem)
-        fp_img1 = f"img1_{get_time('second')}.jpg"
+        fp_img1 = os.path.join(self.dp_out, f"img1_{get_time('second')}.jpg")
         img1 = Image.fromarray(self.lb.compute_latents1(return_image=True))
         img1.save(fp_img1)
         self.save_empty_image()
@@ -138,7 +153,7 @@ class BlendingFrontend():
     def compute_img2(self, *args):
         list_ui_elem = args
         self.setup_lb(list_ui_elem)
-        fp_img2 = f"img2_{get_time('second')}.jpg"
+        fp_img2 = os.path.join(self.dp_out, f"img2_{get_time('second')}.jpg")
         img2 = Image.fromarray(self.lb.compute_latents2(return_image=True))
         img2.save(fp_img2)
         return [self.fp_img_empty, self.fp_img_empty, self.fp_img_empty, fp_img2]
@@ -198,9 +213,11 @@ class BlendingFrontend():
 
     def get_fp_movie(self, timestamp, is_stacked=False):
         if not is_stacked:
-            return f"movie_{timestamp}.mp4"
+            fn = f"movie_{timestamp}.mp4"
         else:
-            return f"movie_stacked_{timestamp}.mp4"
+            fn = f"movie_stacked_{timestamp}.mp4"
+        fp = os.path.join(self.dp_out, fn)
+        return fp
             
     
     def stack_forward(self, prompt2, seed2):
@@ -319,32 +336,43 @@ if __name__ == "__main__":
     with gr.Blocks() as demo:
         with gr.Row():
             prompt1 = gr.Textbox(label="prompt 1")
-            negative_prompt = gr.Textbox(label="negative prompt")          
             prompt2 = gr.Textbox(label="prompt 2")
         
         with gr.Row():
-            duration_compute = gr.Slider(10, 40, self.duration_video, step=1, label='compute budget for transition (seconds)', interactive=True) 
+            duration_compute = gr.Slider(5, 45, self.t_compute_max_allowed, step=1, label='compute budget for transition (seconds)', interactive=True) 
             duration_video = gr.Slider(0.1, 30, self.duration_video, step=0.1, label='result video duration (seconds)', interactive=True) 
             height = gr.Slider(256, 2048, self.height, step=128, label='height', interactive=True)
             width = gr.Slider(256, 2048, self.width, step=128, label='width', interactive=True) 
             
         with gr.Accordion("Advanced Settings (click to expand)", open=False):
 
-            with gr.Row():
-                depth_strength = gr.Slider(0.01, 0.99, self.depth_strength, step=0.01, label='depth_strength', interactive=True) 
-                branch1_influence = gr.Slider(0.0, 1.0, self.branch1_influence, step=0.01, label='branch1_influence', interactive=True) 
-                branch1_mixing_depth = gr.Slider(0.0, 1.0, self.branch1_mixing_depth, step=0.01, label='branch1_mixing_depth', interactive=True) 
+            with gr.Accordion("Diffusion settings", open=True):
+                with gr.Row():
+                    num_inference_steps = gr.Slider(5, 100, self.num_inference_steps, step=1, label='num_inference_steps', interactive=True)
+                    guidance_scale = gr.Slider(1, 25, self.guidance_scale, step=0.1, label='guidance_scale', interactive=True) 
+                    negative_prompt = gr.Textbox(label="negative prompt")          
+            
+            with gr.Accordion("Seeds control", open=True):
+                with gr.Row():
+                    seed1 = gr.Number(420, label="seed 1", interactive=True)
+                    b_newseed1 = gr.Button("randomize seed 1", variant='secondary')
+                    seed2 = gr.Number(420, label="seed 2", interactive=True)
+                    b_newseed2 = gr.Button("randomize seed 2", variant='secondary')
+                    
+            with gr.Accordion("Crossfeeding for last image", open=True):
+                with gr.Row():
+                    branch1_influence = gr.Slider(0.0, 1.0, self.branch1_influence, step=0.01, label='crossfeed power', interactive=True) 
+                    branch1_max_depth_influence = gr.Slider(0.0, 1.0, self.branch1_max_depth_influence, step=0.01, label='crossfeed range', interactive=True) 
+                    branch1_influence_decay = gr.Slider(0.0, 1.0, self.branch1_influence_decay, step=0.01, label='crossfeed decay', interactive=True) 
 
-            with gr.Row():
-                num_inference_steps = gr.Slider(5, 100, self.num_inference_steps, step=1, label='num_inference_steps', interactive=True)
-                guidance_scale = gr.Slider(1, 25, self.guidance_scale, step=0.1, label='guidance_scale', interactive=True) 
-                guidance_scale_mid_damper = gr.Slider(0.01, 2.0, self.guidance_scale_mid_damper, step=0.01, label='guidance_scale_mid_damper', interactive=True) 
+            with gr.Accordion("Transition settings", open=True):
+                with gr.Row():
+                    depth_strength = gr.Slider(0.01, 0.99, self.depth_strength, step=0.01, label='depth_strength', interactive=True) 
+                    guidance_scale_mid_damper = gr.Slider(0.01, 2.0, self.guidance_scale_mid_damper, step=0.01, label='guidance_scale_mid_damper', interactive=True) 
+                    parental_influence = gr.Slider(0.0, 1.0, self.parental_influence, step=0.01, label='parental power', interactive=True) 
+                    parental_max_depth_influence = gr.Slider(0.0, 1.0, self.parental_max_depth_influence, step=0.01, label='parental range', interactive=True) 
+                    parental_influence_decay = gr.Slider(0.0, 1.0, self.parental_influence_decay, step=0.01, label='parental decay', interactive=True) 
         
-            with gr.Row():
-                seed1 = gr.Number(420, label="seed 1", interactive=True)
-                b_newseed1 = gr.Button("randomize seed 1", variant='secondary')
-                seed2 = gr.Number(420, label="seed 2", interactive=True)
-                b_newseed2 = gr.Button("randomize seed 2", variant='secondary')
                 
         with gr.Row():
             b_compute1 = gr.Button('compute first image', variant='primary')
@@ -373,13 +401,18 @@ if __name__ == "__main__":
          
         dict_ui_elem["depth_strength"] = depth_strength
         dict_ui_elem["branch1_influence"] = branch1_influence
-        dict_ui_elem["branch1_mixing_depth"] = branch1_mixing_depth
+        dict_ui_elem["branch1_max_depth_influence"] = branch1_max_depth_influence
+        dict_ui_elem["branch1_influence_decay"] = branch1_influence_decay
         
         dict_ui_elem["num_inference_steps"] = num_inference_steps
         dict_ui_elem["guidance_scale"] = guidance_scale
         dict_ui_elem["guidance_scale_mid_damper"] = guidance_scale_mid_damper
         dict_ui_elem["seed1"] = seed1
         dict_ui_elem["seed2"] = seed2
+        
+        dict_ui_elem["parental_max_depth_influence"] = parental_max_depth_influence
+        dict_ui_elem["parental_influence"] = parental_influence
+        dict_ui_elem["parental_influence_decay"] = parental_influence_decay
         
         # Convert to list, as gradio doesn't seem to accept dicts
         list_ui_elem = []
