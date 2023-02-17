@@ -51,13 +51,14 @@ fps = 30
 lb = LatentBlending(sdh)
 lb.set_prompt1(prompt1)
 lb.set_prompt2(prompt2)
-#FIXME AssertionError: Either specify t_compute_max_allowed or nmb_max_branches
+
 # Run latent blending
 imgs_transition = lb.run_transition(
     depth_strength = depth_strength,
     t_compute_max_allowed = t_compute_max_allowed,
     fixed_seeds = fixed_seeds
     )
+
 # Let's get more cheap frames via linear interpolation (duration_transition*fps frames)
 imgs_transition_ext = add_frames_linear_interp(imgs_transition, duration_transition, fps)
 
