@@ -33,13 +33,12 @@ torch.set_grad_enabled(False)
 
 #%% First let us spawn a stable diffusion holder
 fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_768-ema-pruned.ckpt"
-
 sdh = StableDiffusionHolder(fp_ckpt)
 
     
 #%% Next let's set up all parameters
-quality = 'medium'
 depth_strength = 0.65 # Specifies how deep (in terms of diffusion iterations the first branching happens)
+t_compute_max_allowed = 15 # Determines the quality of the transition in terms of compute time you grant it
 fixed_seeds = [69731932, 504430820]
     
 prompt1 = "photo of a beautiful cherry forest covered in white flowers, ambient light, very detailed, magic"
@@ -50,13 +49,15 @@ fps = 30
 
 # Spawn latent blending
 lb = LatentBlending(sdh)
-lb.load_branching_profile(quality=quality, depth_strength=depth_strength)
 lb.set_prompt1(prompt1)
 lb.set_prompt2(prompt2)
-
+#FIXME AssertionError: Either specify t_compute_max_allowed or nmb_max_branches
 # Run latent blending
-imgs_transition = lb.run_transition(fixed_seeds=fixed_seeds)
-
+imgs_transition = lb.run_transition(
+    depth_strength = depth_strength,
+    t_compute_max_allowed = t_compute_max_allowed,
+    fixed_seeds = fixed_seeds
+    )
 # Let's get more cheap frames via linear interpolation (duration_transition*fps frames)
 imgs_transition_ext = add_frames_linear_interp(imgs_transition, duration_transition, fps)
 
