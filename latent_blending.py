@@ -204,190 +204,6 @@ class LatentBlending():
         """
         self.image2_lowres = image
     
-    def load_branching_profile(
-            self, 
-            quality: str = 'medium',
-            depth_strength: float = 0.65,
-            nmb_frames: int = 100,
-            nmb_mindist: int = 3,
-        ):
-        r"""
-        Helper function to set up the branching structure automatically.
-        
-        Args:
-            quality: str 
-                Determines how many diffusion steps are being made + how many branches in total.
-                Tradeoff between quality and speed of computation.
-                Choose: lowest, low, medium, high, ultra
-            depth_strength: float = 0.65,
-                Determines how deep the first injection will happen. 
-                Deeper injections will cause (unwanted) formation of new structures,
-                more shallow values will go into alpha-blendy land.
-            nmb_frames: int = 360,
-                total number of frames
-            nmb_mindist: int = 3 
-                minimum distance in terms of diffusion iteratinos between subsequent injections
-        """ 
-        
-        if quality == 'lowest':
-            num_inference_steps = 12
-            nmb_max_branches = 5
-        elif quality == 'low':
-            num_inference_steps = 15
-            nmb_max_branches = nmb_frames//16
-        elif quality == 'medium':
-            num_inference_steps = 30
-            nmb_max_branches = nmb_frames//8
-        elif quality == 'high':
-            num_inference_steps = 60
-            nmb_max_branches = nmb_frames//4
-        elif quality == 'ultra':
-            num_inference_steps = 100
-            nmb_max_branches = nmb_frames//2
-        elif quality == 'upscaling_step1':
-            num_inference_steps = 40
-            nmb_max_branches = 12
-        elif quality == 'upscaling_step2':
-            num_inference_steps = 100
-            nmb_max_branches = 6
-        else: 
-            raise ValueError(f"quality = '{quality}' not supported")
-            
-        self.autosetup_branching(depth_strength, num_inference_steps, nmb_max_branches)
-        
-       
-    def autosetup_branching(
-            self, 
-            depth_strength: float = 0.65,
-            num_inference_steps: int = 30,
-            nmb_max_branches: int = 20,
-            nmb_mindist: int = 3,
-        ):
-        r"""
-        Automatically sets up the branching schedule.
-        
-        Args:
-            depth_strength: float = 0.65,
-                Determines how deep the first injection will happen. 
-                Deeper injections will cause (unwanted) formation of new structures,
-                more shallow values will go into alpha-blendy land.
-            num_inference_steps: int
-                Number of diffusion steps. Higher values will take more compute time.
-            nmb_max_branches (int): The number of diffusion-generated images 
-                at the end of the inference.
-            nmb_mindist (int): The minimum number of diffusion steps 
-                between two injections.
-        """
-        
-        idx_injection_first = int(np.round(num_inference_steps*depth_strength))
-        idx_injection_last = num_inference_steps - nmb_mindist
-        nmb_injections = int(np.floor(num_inference_steps/5)) - 1
-        
-        list_injection_idx = [0]
-        list_injection_idx.extend(np.linspace(idx_injection_first, idx_injection_last, nmb_injections).astype(int))
-        list_nmb_branches = np.round(np.logspace(np.log10(2), np.log10(nmb_max_branches), nmb_injections+1)).astype(int)
-        
-        # Cleanup. There should be at least nmb_mindist diffusion steps between each injection and list_nmb_branches increases
-        list_nmb_branches_clean = [list_nmb_branches[0]]
-        list_injection_idx_clean = [list_injection_idx[0]]
-        for idx_injection, nmb_branches in zip(list_injection_idx[1:], list_nmb_branches[1:]):
-            if idx_injection - list_injection_idx_clean[-1] >= nmb_mindist and nmb_branches > list_nmb_branches_clean[-1]:
-                list_nmb_branches_clean.append(nmb_branches)
-                list_injection_idx_clean.append(idx_injection)
-        list_nmb_branches_clean[-1] = nmb_max_branches
-                
-        list_injection_idx_clean = [int(l) for l in list_injection_idx_clean]
-        list_nmb_branches_clean = [int(l) for l in list_nmb_branches_clean]
-        
-        list_injection_idx = list_injection_idx_clean
-        list_nmb_branches = list_nmb_branches_clean
-
-        list_nmb_branches = list_nmb_branches
-        list_injection_idx = list_injection_idx
-        print(f"autosetup_branching: num_inference_steps: {num_inference_steps} list_nmb_branches: {list_nmb_branches} list_injection_idx: {list_injection_idx}")
-        self.setup_branching(num_inference_steps, list_nmb_branches=list_nmb_branches, list_injection_idx=list_injection_idx)
-
-    
-    def setup_branching(self,
-                        num_inference_steps: int =30,
-                        list_nmb_branches: List[int] = None, 
-                        list_injection_strength: List[float] = None, 
-                        list_injection_idx: List[int] = None, 
-                      ):
-            r""" 
-            Sets the branching structure for making transitions.
-            num_inference_steps: int
-                Number of diffusion steps. Larger values will take more compute time.
-            list_nmb_branches: List[int]:
-                list of the number of branches for each injection.
-            list_injection_strength: List[float]:
-                list of injection strengths within interval [0, 1), values need to be increasing.
-                Alternatively you can direclty specify the list_injection_idx.
-            list_injection_idx: List[int]:
-                list of injection strengths within interval [0, 1), values need to be increasing.
-                Alternatively you can specify the list_injection_strength.
-                
-            """
-            # Assert
-            assert not((list_injection_strength is not None) and (list_injection_idx is not None)), "suppyl either list_injection_strength or list_injection_idx"
-            
-            if list_injection_strength is None:
-                assert list_injection_idx is not None, "Supply either list_injection_idx or list_injection_strength"
-                assert isinstance(list_injection_idx[0], int) or isinstance(list_injection_idx[0], np.int) , "Need to supply integers for list_injection_idx"
-                
-            if list_injection_idx is None:
-                assert list_injection_strength is not None, "Supply either list_injection_idx or list_injection_strength"
-                # Create the injection indexes
-                list_injection_idx = [int(round(x*num_inference_steps)) for x in list_injection_strength]
-                assert min(np.diff(list_injection_idx)) > 0, 'Injection idx needs to be increasing'
-                if min(np.diff(list_injection_idx)) < 2:
-                    print("Warning: your injection spacing is very tight. consider increasing the distances")
-                assert isinstance(list_injection_strength[1], np.floating) or isinstance(list_injection_strength[1], float), "Need to supply floats for list_injection_strength"
-                # we are checking element 1 in list_injection_strength because "0" is an int... [0, 0.5]
-            
-            assert max(list_injection_idx) < num_inference_steps, "Decrease the injection index or strength"
-            assert len(list_injection_idx) == len(list_nmb_branches), "Need to have same length"
-            assert max(list_injection_idx) < num_inference_steps,"Injection index cannot happen after last diffusion step! Decrease list_injection_idx or list_injection_strength[-1]"
-            
-            
-            # Auto inits
-            list_injection_idx_ext = list_injection_idx[:] 
-            list_injection_idx_ext.append(num_inference_steps)
-            
-            # If injection at depth 0 not specified, we will start out with 2 branches
-            if list_injection_idx_ext[0] != 0:
-                list_injection_idx_ext.insert(0,0)
-                list_nmb_branches.insert(0,2)
-            assert list_nmb_branches[0] == 2, "Need to start with 2 branches. set list_nmb_branches[0]=2"
-            
-           
-            # Set attributes
-            self.num_inference_steps = num_inference_steps
-            self.sdh.num_inference_steps = num_inference_steps
-            self.list_nmb_branches = list_nmb_branches
-            self.list_injection_idx = list_injection_idx
-            self.list_injection_idx_ext = list_injection_idx_ext
-            
-            self.init_tree_struct()
-        
-    def init_tree_struct(self):
-        r"""
-        Initializes tree variables for holding latents etc.
-        """
-        
-        self.tree_latents = []
-        self.tree_fracts = []
-        self.tree_status = []
-        self.tree_final_imgs_timing = [0]*self.list_nmb_branches[-1]
-        
-        nmb_blocks_time = len(self.list_injection_idx_ext)-1
-        for t_block in range(nmb_blocks_time):
-            nmb_branches = self.list_nmb_branches[t_block]
-            list_fract_mixing_current = get_spacing(nmb_branches, self.mid_compression_scaler)
-            self.tree_fracts.append(list_fract_mixing_current)
-            self.tree_latents.append([None]*nmb_branches)
-            self.tree_status.append(['untouched']*nmb_branches)
-        
     def run_transition(
             self,
             recycle_img1: Optional[bool] = False, 
@@ -602,52 +418,6 @@ class LatentBlending():
         self.tree_final_imgs.insert(b_parent1+1, self.sdh.latent2image(list_latents[-1]))
         self.tree_fracts.insert(b_parent1+1, fract_mixing)
         self.tree_idx_injection.insert(b_parent1+1, idx_injection)
-        
-        
-    def compute_latents_mix(self, fract_mixing, b_parent1, b_parent2, idx_injection):    
-        r"""
-        Runs a diffusion trajectory, using the latents from the respective parents
-        Args:
-            fract_mixing: float
-                the fraction along the transition axis [0, 1]
-            b_parent1: int
-                index of parent1 to be used
-            b_parent2: int
-                index of parent2 to be used
-            idx_injection: int
-                the index in terms of diffusion steps, where the next insertion will start.
-        """
-        list_conditionings = self.get_mixed_conditioning(fract_mixing)
-        fract_mixing_parental = (fract_mixing - self.tree_fracts[b_parent1]) / (self.tree_fracts[b_parent2] - self.tree_fracts[b_parent1]) 
-        # idx_reversed = self.num_inference_steps - idx_injection
-        
-        list_latents_parental_mix = []
-        for i in range(self.num_inference_steps):
-            latents_p1 = self.tree_latents[b_parent1][i]
-            latents_p2 = self.tree_latents[b_parent2][i]
-            if latents_p1 is None or latents_p2 is None:
-                latents_parental = None
-            else:
-                latents_parental = interpolate_spherical(latents_p1, latents_p2, fract_mixing_parental)
-            list_latents_parental_mix.append(latents_parental)
-
-        idx_mixing_stop = int(round(self.num_inference_steps*self.parental_max_depth_influence))
-        mixing_coeffs = idx_injection*[self.parental_influence]
-        nmb_mixing = idx_mixing_stop - idx_injection
-        if nmb_mixing > 0:
-            mixing_coeffs.extend(list(np.linspace(self.parental_influence, self.parental_influence*self.parental_influence_decay, nmb_mixing)))     
-        mixing_coeffs.extend((self.num_inference_steps-len(mixing_coeffs))*[0])
-        
-        latents_start = list_latents_parental_mix[idx_injection-1]
-        list_latents = self.run_diffusion(
-            list_conditionings, 
-            latents_start = latents_start,
-            idx_start = idx_injection,
-            list_latents_mixing = list_latents_parental_mix,
-            mixing_coeffs = mixing_coeffs
-            )
-        
-        return list_latents
             
         
     def compute_latents1(self, return_image=False):
@@ -706,6 +476,53 @@ class LatentBlending():
             return self.sdh.latent2image(list_latents2[-1])
         else:
             return list_latents2
+
+
+    def compute_latents_mix(self, fract_mixing, b_parent1, b_parent2, idx_injection):    
+        r"""
+        Runs a diffusion trajectory, using the latents from the respective parents
+        Args:
+            fract_mixing: float
+                the fraction along the transition axis [0, 1]
+            b_parent1: int
+                index of parent1 to be used
+            b_parent2: int
+                index of parent2 to be used
+            idx_injection: int
+                the index in terms of diffusion steps, where the next insertion will start.
+        """
+        list_conditionings = self.get_mixed_conditioning(fract_mixing)
+        fract_mixing_parental = (fract_mixing - self.tree_fracts[b_parent1]) / (self.tree_fracts[b_parent2] - self.tree_fracts[b_parent1]) 
+        # idx_reversed = self.num_inference_steps - idx_injection
+        
+        list_latents_parental_mix = []
+        for i in range(self.num_inference_steps):
+            latents_p1 = self.tree_latents[b_parent1][i]
+            latents_p2 = self.tree_latents[b_parent2][i]
+            if latents_p1 is None or latents_p2 is None:
+                latents_parental = None
+            else:
+                latents_parental = interpolate_spherical(latents_p1, latents_p2, fract_mixing_parental)
+            list_latents_parental_mix.append(latents_parental)
+
+        idx_mixing_stop = int(round(self.num_inference_steps*self.parental_max_depth_influence))
+        mixing_coeffs = idx_injection*[self.parental_influence]
+        nmb_mixing = idx_mixing_stop - idx_injection
+        if nmb_mixing > 0:
+            mixing_coeffs.extend(list(np.linspace(self.parental_influence, self.parental_influence*self.parental_influence_decay, nmb_mixing)))     
+        mixing_coeffs.extend((self.num_inference_steps-len(mixing_coeffs))*[0])
+        
+        latents_start = list_latents_parental_mix[idx_injection-1]
+        list_latents = self.run_diffusion(
+            list_conditionings, 
+            latents_start = latents_start,
+            idx_start = idx_injection,
+            list_latents_mixing = list_latents_parental_mix,
+            mixing_coeffs = mixing_coeffs
+            )
+        
+        return list_latents
+    
         
     def get_noise(self, seed):
         r"""
@@ -725,7 +542,6 @@ class LatentBlending():
             C, H, W = shape_latents
         
         return torch.randn((1, C, H, W), generator=generator, device=self.sdh.device)
-    
 
 
     @torch.no_grad()
@@ -783,55 +599,9 @@ class LatentBlending():
                 list_latents_mixing = list_latents_mixing,
                 mixing_coeffs = mixing_coeffs,
                 return_image=return_image)
+
         
-        # elif self.mode == 'inpaint':
-        #     text_embeddings = list_conditionings[0]
-        #     assert self.sdh.image_source is not None, "image_source is None. Please run init_inpainting first."
-        #     assert self.sdh.mask_image is not None, "image_source is None. Please run init_inpainting first."
-        #     return self.sdh.run_diffusion_inpaint(text_embeddings, latents_for_injection=latents_for_injection, idx_start=idx_start, idx_stop=idx_stop, return_image=return_image)
-
-    # FIXME. new transition engine
-    def run_upscaling_step1(
-            self, 
-            dp_img: str,
-            depth_strength: float = 0.65,
-            num_inference_steps: int = 30,
-            nmb_max_branches: int = 10,
-            fixed_seeds: Optional[List[int]] = None,
-            ):
-        r"""
-        Initializes inpainting with a source and maks image.
-        Args:
-            dp_img: 
-                Path to directory where the low-res images and yaml will be saved to.
-                This directory cannot exist and will be created here.
-            FIXME
-            quality: str 
-                Determines how many diffusion steps are being made + how many branches in total.
-                We suggest to leave it with upscaling_step1 which has 10 final branches.
-            depth_strength: float = 0.65,
-                Determines how deep the first injection will happen. 
-                Deeper injections will cause (unwanted) formation of new structures,
-                more shallow values will go into alpha-blendy land.
-            fixed_seeds: Optional[List[int)]:
-                You can supply two seeds that are used for the first and second keyframe (prompt1 and prompt2).
-                Otherwise random seeds will be taken.    
-        """
-        assert self.text_embedding1 is not None, 'run set_prompt1(yourprompt1) first'
-        assert self.text_embedding2 is not None, 'run set_prompt2(yourprompt2) first'
-        assert not os.path.isdir(dp_img), f"directory already exists: {dp_img}"
-
-        if fixed_seeds is None:
-            fixed_seeds = list(np.random.randint(0, 1000000, 2).astype(np.int32))
-
-        # Run latent blending
-        imgs_transition = self.run_transition(fixed_seeds=fixed_seeds)
-        self.write_imgs_transition(dp_img, imgs_transition)
-
-        print(f"run_upscaling_step1: completed! {dp_img}")
-        
-        
-    def run_upscaling_step2(
+    def run_upscaling(
             self, 
             dp_img: str,
             depth_strength: float = 0.65,
@@ -839,8 +609,9 @@ class LatentBlending():
             nmb_max_branches_highres: int = 5,
             nmb_max_branches_lowres: int = 6,
             fixed_seeds: Optional[List[int]] = None,
+            duration_single_segment = 3,
             ):
-        
+        #FIXME
         fp_yml = os.path.join(dp_img, "lowres.yaml")
         fp_movie = os.path.join(dp_img, "movie_highres.mp4")
         fps = 24
@@ -864,8 +635,6 @@ class LatentBlending():
         text_embeddingA = self.sdh.get_text_embedding(prompt1)
         text_embeddingB = self.sdh.get_text_embedding(prompt2)
         
-        #FIXME: have a total length for the whole video section
-        duration_single_trans = 3
         list_fract_mixing = np.linspace(0, 1, nmb_max_branches_lowres-1)
         
         for i in range(nmb_max_branches_lowres-1):
@@ -891,7 +660,7 @@ class LatentBlending():
                 nmb_max_branches = nmb_max_branches_highres,
                 )
             
-            list_imgs_interp = add_frames_linear_interp(list_imgs, fps, duration_single_trans)
+            list_imgs_interp = add_frames_linear_interp(list_imgs, fps, duration_single_segment)
             
             # Save movie frame
             for img in list_imgs_interp:
@@ -899,27 +668,6 @@ class LatentBlending():
                 
         ms.finalize()
         
-        
-
-    def init_inpainting(
-            self, 
-            image_source: Union[Image.Image, np.ndarray] = None, 
-            mask_image: Union[Image.Image, np.ndarray] = None, 
-            init_empty: Optional[bool] = False,
-        ):
-        r"""
-        Initializes inpainting with a source and maks image.
-        Args:
-            image_source: Union[Image.Image, np.ndarray]
-                Source image onto which the mask will be applied.
-            mask_image: Union[Image.Image, np.ndarray]
-                Mask image, value = 0 will stay untouched, value = 255 subjet to diffusion
-            init_empty: Optional[bool]:
-                Initialize inpainting with an empty image and mask, effectively disabling inpainting,
-                useful for generating a first image for transitions using diffusion.
-        """
-        self.init_mode()
-        self.sdh.init_inpainting(image_source, mask_image, init_empty)
 
    
     @torch.no_grad()
@@ -1059,20 +807,6 @@ class LatentBlending():
         assert np.mod(height, 64) == 0, "set_height: value needs to be divisible by 64"
         self.height = height
         self.sdh.height = height
-        
-    def inject_latents(self, list_latents, inject_img1=True, inject_img2=False):
-        r"""
-        Injects list of latents into tree structure.
-        
-        """
-        assert inject_img1 != inject_img2, "Either inject into img1 or img2"
-        assert self.tree_latents is not None, "You need to setup the branching beforehand, run autosetup_branching() or setup_branching() before"
-        
-        for t_block in range(len(self.list_injection_idx)):
-            if inject_img1:
-                self.tree_latents[t_block][0] = list_latents[self.list_injection_idx_ext[t_block]:self.list_injection_idx_ext[t_block+1]]
-            if inject_img2:
-                self.tree_latents[t_block][-1] = list_latents[self.list_injection_idx_ext[t_block]:self.list_injection_idx_ext[t_block+1]]
         
 
     def swap_forward(self):
