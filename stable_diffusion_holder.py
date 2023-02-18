@@ -285,8 +285,7 @@ class StableDiffusionHolder:
             return_image: Optional[bool] = False,
         ):
         r"""
-        Wrapper function for run_diffusion_standard and run_diffusion_inpaint.
-        Depending on the mode, the correct one will be executed.
+        Diffusion standard version. 
         
         Args:
             text_embeddings: torch.FloatTensor 
@@ -363,6 +362,99 @@ class StableDiffusionHolder:
                     return self.latent2image(latents)
                 else:
                     return list_latents_out
+                
+                
+    @torch.no_grad()
+    def run_diffusion_upscaling(
+            self, 
+            cond,
+            uc_full,
+            latents_start: torch.FloatTensor, 
+            idx_start: int = -1, 
+            list_latents_mixing = None, 
+            mixing_coeffs = 0.0,
+            return_image: Optional[bool] = False
+        ):
+        r"""
+        Diffusion upscaling version. 
+        # FIXME
+        Args:
+            ??
+            latents_for_injection: torch.FloatTensor 
+                Latents that are used for injection
+            idx_start: int
+                Index of the diffusion process start and where the latents_for_injection are injected
+            return_image: Optional[bool]
+                Optionally return image directly
+        """
+ 
+        # Asserts
+        if type(mixing_coeffs) == float:
+            list_mixing_coeffs = self.num_inference_steps*[mixing_coeffs]
+        elif type(mixing_coeffs) == list:
+            assert len(mixing_coeffs) == self.num_inference_steps
+            list_mixing_coeffs = mixing_coeffs
+        else:
+            raise ValueError("mixing_coeffs should be float or list with len=num_inference_steps")
+        
+        if np.sum(list_mixing_coeffs) > 0:
+            assert len(list_latents_mixing) == self.num_inference_steps
+        
+        precision_scope = autocast if self.precision == "autocast" else nullcontext
+        generator = torch.Generator(device=self.device).manual_seed(int(self.seed))
+        
+        h = uc_full['c_concat'][0].shape[2]        
+        w = uc_full['c_concat'][0].shape[3]  
+        
+        with precision_scope("cuda"):
+            with self.model.ema_scope():
+
+                shape_latents = [self.model.channels, h, w]
+    
+                self.sampler.make_schedule(ddim_num_steps=self.num_inference_steps-1, ddim_eta=self.ddim_eta, verbose=False)
+                C, H, W = shape_latents
+                size = (1, C, H, W)
+                b = size[0]
+                
+                latents = latents_start.clone()
+    
+                timesteps = self.sampler.ddim_timesteps
+    
+                time_range = np.flip(timesteps)
+                total_steps = timesteps.shape[0]
+                
+                # collect latents
+                list_latents_out = []
+                for i, step in enumerate(time_range):
+                    # Set the right starting latents
+                    if i < idx_start:
+                        list_latents_out.append(None)
+                        continue
+                    elif i == idx_start:
+                        latents = latents_start.clone()
+                    
+                    # Mix the latents. 
+                    if i > 0 and list_mixing_coeffs[i]>0:
+                        latents_mixtarget = list_latents_mixing[i-1].clone()
+                        latents = interpolate_spherical(latents, latents_mixtarget, list_mixing_coeffs[i])
+                    
+                    # print(f"diffusion iter {i}")
+                    index = total_steps - i - 1
+                    ts = torch.full((b,), step, device=self.device, dtype=torch.long)
+                    outs = self.sampler.p_sample_ddim(latents, cond, ts, index=index, use_original_steps=False,
+                                              quantize_denoised=False, temperature=1.0,
+                                              noise_dropout=0.0, score_corrector=None,
+                                              corrector_kwargs=None,
+                                              unconditional_guidance_scale=self.guidance_scale,
+                                              unconditional_conditioning=uc_full,
+                                              dynamic_threshold=None)
+                    latents, pred_x0 = outs
+                    list_latents_out.append(latents.clone())
+    
+                if return_image:        
+                    return self.latent2image(latents)
+                else:
+                    return list_latents_out                    
 
     @torch.no_grad()
     def run_diffusion_inpaint(
@@ -473,93 +565,6 @@ class StableDiffusionHolder:
                     return self.latent2image(latents)
                 else:
                     return list_latents_out
-                
-    @torch.no_grad()
-    def run_diffusion_upscaling(
-            self, 
-            cond,
-            uc_full,
-            latents_for_injection: torch.FloatTensor = None, 
-            idx_start: int = -1, 
-            idx_stop: int = -1, 
-            return_image: Optional[bool] = False
-        ):
-        r"""
-        Wrapper function for run_diffusion_standard and run_diffusion_inpaint.
-        Depending on the mode, the correct one will be executed.
-        
-        Args:
-            ??
-            latents_for_injection: torch.FloatTensor 
-                Latents that are used for injection
-            idx_start: int
-                Index of the diffusion process start and where the latents_for_injection are injected
-            idx_stop: int
-                Index of the diffusion process end.
-            return_image: Optional[bool]
-                Optionally return image directly
-        """
- 
-        
-        if latents_for_injection is None:
-            do_inject_latents = False
-        else:
-            do_inject_latents = True    
-        
-        precision_scope = autocast if self.precision == "autocast" else nullcontext
-        generator = torch.Generator(device=self.device).manual_seed(int(self.seed))
-        
-        h = uc_full['c_concat'][0].shape[2]        
-        w = uc_full['c_concat'][0].shape[3]  
-        
-        with precision_scope("cuda"):
-            with self.model.ema_scope():
-                
-
-                shape_latents = [self.model.channels, h, w]
-    
-                self.sampler.make_schedule(ddim_num_steps=self.num_inference_steps-1, ddim_eta=self.ddim_eta, verbose=False)
-                C, H, W = shape_latents
-                size = (1, C, H, W)
-                b = size[0]
-                
-                latents = torch.randn(size, generator=generator, device=self.device)
-    
-                timesteps = self.sampler.ddim_timesteps
-    
-                time_range = np.flip(timesteps)
-                total_steps = timesteps.shape[0]
-                
-                # collect latents
-                list_latents_out = []
-                for i, step in enumerate(time_range):
-                    if do_inject_latents:
-                        # Inject latent at right place
-                        if i < idx_start:
-                            continue
-                        elif i == idx_start:
-                            latents = latents_for_injection.clone()
-                    
-                    if i == idx_stop:
-                        return list_latents_out
-                    
-                    # print(f"diffusion iter {i}")
-                    index = total_steps - i - 1
-                    ts = torch.full((b,), step, device=self.device, dtype=torch.long)
-                    outs = self.sampler.p_sample_ddim(latents, cond, ts, index=index, use_original_steps=False,
-                                              quantize_denoised=False, temperature=1.0,
-                                              noise_dropout=0.0, score_corrector=None,
-                                              corrector_kwargs=None,
-                                              unconditional_guidance_scale=self.guidance_scale,
-                                              unconditional_conditioning=uc_full,
-                                              dynamic_threshold=None)
-                    latents, pred_x0 = outs
-                    list_latents_out.append(latents.clone())
-    
-                if return_image:        
-                    return self.latent2image(latents)
-                else:
-                    return list_latents_out                    
 
     @torch.no_grad()
     def latent2image(

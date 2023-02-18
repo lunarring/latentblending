@@ -32,23 +32,35 @@ torch.set_grad_enabled(False)
 import gradio as gr
 import copy
 from dotenv import find_dotenv, load_dotenv
+import shutil
 
+"""
+never hit compute trans -> multi movie add fail
+
+"""
 
 
 #%%
 
 class BlendingFrontend():
     def __init__(self, sdh=None):
+        self.num_inference_steps = 30
         if sdh is None:
             self.use_debug = True
+            self.height = 768
+            self.width = 768
         else:
             self.use_debug = False
             self.lb = LatentBlending(sdh)
-            
-        self.share = True
-        self.num_inference_steps = 30
+            self.lb.sdh.num_inference_steps = self.num_inference_steps
+            self.height = self.lb.sdh.height
+            self.width = self.lb.sdh.width
+        
+        self.init_save_dir()
+        self.save_empty_image()
+        self.share = False
         self.depth_strength = 0.25
-        self.seed1 = 42
+        self.seed1 = 420
         self.seed2 = 420
         self.guidance_scale = 4.0
         self.guidance_scale_mid_damper = 0.5
@@ -72,16 +84,13 @@ class BlendingFrontend():
         self.current_timestamp = None
         self.recycle_img1 = False
         self.recycle_img2 = False
+        self.fp_img1 = None
+        self.fp_img2 = None
+        self.multi_idx_current = -1
+        self.multi_list_concat = []
+        self.list_imgs_shown_last = 5*[self.fp_img_empty]
+        self.nmb_trans_stack = 6
         
-        if not self.use_debug:
-            self.lb.sdh.num_inference_steps = self.num_inference_steps
-            self.height = self.lb.sdh.height
-            self.width = self.lb.sdh.width
-        else:
-            self.height = 768
-            self.width = 768
-            
-        self.init_save_dir()
         
         
     def init_save_dir(self):
@@ -89,12 +98,18 @@ class BlendingFrontend():
         try:
             self.dp_out = os.getenv("dp_out")
         except Exception as e:
+            print(f"did not find .env file. using local folder. {e}")
             self.dp_out = ""
+        self.dp_imgs = os.path.join(self.dp_out, "imgs")
+        os.makedirs(self.dp_imgs, exist_ok=True)
+        self.dp_movies = os.path.join(self.dp_out, "movies")
+        os.makedirs(self.dp_movies, exist_ok=True)
+        
         
         
         # make dummy image
     def save_empty_image(self):
-        self.fp_img_empty = os.path.join(self.dp_out, 'empty.jpg')
+        self.fp_img_empty = os.path.join(self.dp_imgs, 'empty.jpg')
         Image.fromarray(np.zeros((self.height, self.width, 3), dtype=np.uint8)).save(self.fp_img_empty, quality=5)
         
         
@@ -140,22 +155,21 @@ class BlendingFrontend():
     def compute_img1(self, *args):
         list_ui_elem = args
         self.setup_lb(list_ui_elem)
-        fp_img1 = os.path.join(self.dp_out, f"img1_{get_time('second')}.jpg")
+        self.fp_img1 = os.path.join(self.dp_imgs, f"img1_{get_time('second')}.jpg")
         img1 = Image.fromarray(self.lb.compute_latents1(return_image=True))
-        img1.save(fp_img1)
-        self.save_empty_image()
+        img1.save(self.fp_img1)
         self.recycle_img1 = True
         self.recycle_img2 = False
-        return [fp_img1, self.fp_img_empty, self.fp_img_empty, self.fp_img_empty, self.fp_img_empty]
+        return [self.fp_img1, self.fp_img_empty, self.fp_img_empty, self.fp_img_empty, self.fp_img_empty]
     
     def compute_img2(self, *args):
         list_ui_elem = args
         self.setup_lb(list_ui_elem)
-        fp_img2 = os.path.join(self.dp_out, f"img2_{get_time('second')}.jpg")
+        self.fp_img2 = os.path.join(self.dp_imgs, f"img2_{get_time('second')}.jpg")
         img2 = Image.fromarray(self.lb.compute_latents2(return_image=True))
-        img2.save(fp_img2)
+        img2.save(self.fp_img2)
         self.recycle_img2 = True
-        return [self.fp_img_empty, self.fp_img_empty, self.fp_img_empty, fp_img2]
+        return [self.fp_img_empty, self.fp_img_empty, self.fp_img_empty, self.fp_img2]
         
     def compute_transition(self, *args):
         
@@ -199,7 +213,7 @@ class BlendingFrontend():
         self.current_timestamp = get_time('second')
         self.list_fp_imgs_current = []
         for i in range(len(list_imgs_preview)):
-            fp_img = f"img_preview_{i}_{self.current_timestamp}.jpg"
+            fp_img = os.path.join(self.dp_imgs, f"img_preview_{i}_{self.current_timestamp}.jpg")
             list_imgs_preview[i].save(fp_img)
             self.list_fp_imgs_current.append(fp_img)
         
@@ -207,51 +221,38 @@ class BlendingFrontend():
         imgs_transition_ext = add_frames_linear_interp(imgs_transition, self.duration_video, self.fps)
 
         # Save as movie
-        fp_movie = self.get_fp_movie(self.current_timestamp)
-        if os.path.isfile(fp_movie):
-            os.remove(fp_movie)
-        ms = MovieSaver(fp_movie, fps=self.fps)
+        self.fp_movie = os.path.join(self.dp_movies, f"movie_{self.current_timestamp}.mp4") 
+        if os.path.isfile(self.fp_movie):
+            os.remove(self.fp_movie)
+        ms = MovieSaver(self.fp_movie, fps=self.fps)
         for img in tqdm(imgs_transition_ext):
             ms.write_frame(img)
         ms.finalize()
         print("DONE SAVING MOVIE! SENDING BACK...")
         
         # Assemble Output, updating the preview images and le movie
-        list_return = self.list_fp_imgs_current + [fp_movie]
+        list_return = self.list_fp_imgs_current + [self.fp_movie]
         return list_return
 
-    def get_fp_movie(self, timestamp, is_stacked=False):
-        if not is_stacked:
-            fn = f"movie_{timestamp}.mp4"
-        else:
-            fn = f"movie_stacked_{timestamp}.mp4"
-        fp = os.path.join(self.dp_out, fn)
-        return fp
-            
     
     def stack_forward(self, prompt2, seed2):
         # Save preview images, prompts and seeds into dictionary for stacking
-        dp_out = os.path.join(self.dp_out, get_time('second'))
-        self.lb.write_imgs_transition(dp_out)
+        # self.list_imgs_shown_last = self.get_multi_trans_imgs_preview(f"lowres_{self.current_timestamp}")[0:5]
+        timestamp_section = get_time('second')
+        self.lb.write_imgs_transition(os.path.join(self.dp_out, f"lowres_{timestamp_section}"))
+        self.lb.write_imgs_transition(os.path.join(self.dp_out, "lowres_current"))
+        shutil.copyfile(self.fp_movie, os.path.join(self.dp_out, f"lowres_{timestamp_section}", "movie.mp4"))
+        
         self.lb.swap_forward()
-        list_out = [self.list_fp_imgs_current[-1]]
+        list_out = [self.fp_img2] 
         list_out.extend([self.fp_img_empty]*4)
         list_out.append(prompt2)
         list_out.append(seed2)
         list_out.append("")
         list_out.append(np.random.randint(0, 10000000))
+        
         return list_out
-        
-
-    def stack_movie(self):
-        # collect all that are in...
-        list_fp_movies = []
-
-        list_fp_movies.append(self.get_fp_movie(timestamp))
-        
-        fp_stacked = self.get_fp_movie(get_time('second'), True)
-        concatenate_movies(fp_stacked, list_fp_movies)
-        return fp_stacked
+    
         
 
     def get_state_dict(self):
@@ -264,7 +265,90 @@ class BlendingFrontend():
             state_dict[v] = getattr(self, v)
         return state_dict
     
-   
+    
+    def get_list_all_stacked(self):
+        list_all = os.listdir(os.path.join(self.dp_out))
+        list_all = [l for l in list_all if l[:8]=="lowres_2"]
+        list_all.sort()
+        return list_all
+        
+    def multi_trans_show_older(self):
+        list_all = self.get_list_all_stacked()
+        if self.multi_idx_current == -1:
+            self.multi_idx_current = len(list_all) - 1
+        else:
+            self.multi_idx_current -= 1
+    
+        if self.multi_idx_current < 0:
+            self.multi_idx_current  = 0
+        dn = list_all[self.multi_idx_current]
+        return self.get_multi_trans_imgs_preview(dn)
+    
+    def multi_trans_show_newer(self):
+        list_all = self.get_list_all_stacked()
+        if self.multi_idx_current == -1:
+            self.multi_idx_current = len(list_all) - 1
+        else:
+            self.multi_idx_current += 1
+    
+        if self.multi_idx_current >= len(list_all):
+            self.multi_idx_current  = len(list_all) - 1
+        dn = list_all[self.multi_idx_current]
+        return self.get_multi_trans_imgs_preview(dn)
+    
+    def get_multi_trans_imgs_preview(self, dn):
+        dp_show = os.path.join(self.dp_out, dn)
+        list_imgs_transition = os.listdir(dp_show)
+        list_imgs_transition = [l for l in list_imgs_transition if l[:11]=="lowres_img_"]
+        list_imgs_transition.sort()
+    
+        idx_img_prev = np.round(np.linspace(0, len(list_imgs_transition)-1, 5)).astype(np.int32)
+        list_imgs_preview = []
+        for j in idx_img_prev:
+            list_imgs_preview.append(os.path.join(dp_show, list_imgs_transition[j]))
+        
+        list_out = list_imgs_preview
+        list_out.append(dn[7:])
+        
+        return list_out
+       
+    def multi_append(self):
+        list_all = self.get_list_all_stacked()
+        dn = list_all[self.multi_idx_current]
+        self.multi_list_concat.append(dn)
+        list_short = [dn[7:] for dn in self.multi_list_concat]
+        str_out = "\n".join(list_short)
+        return str_out
+       
+    def multi_reset(self):
+        self.multi_list_concat = []
+        str_out = ""
+        return str_out
+       
+    def multi_concat(self):
+        # Make new output directory
+        dp_multi = os.path.join(self.dp_out, f"multi_{get_time('second')}")       
+        os.makedirs(dp_multi, exist_ok=False)
+        
+        # Copy all low-res folders (prepending multi001_xxxx), however leave out the movie.mp4
+        # also collect all movie.mp4
+        list_fp_movies = []
+        for i, dn in enumerate(self.multi_list_concat):
+            dp_source = os.path.join(self.dp_out, dn)
+            dp_sequence = os.path.join(dp_multi, f"{str(i).zfill(3)}_{dn}")
+            os.makedirs(dp_sequence, exist_ok=False)
+            list_source = os.listdir(dp_source)
+            list_source = [l for l in list_source if not l.endswith(".mp4")]
+            for fn in list_source:
+                shutil.copyfile(os.path.join(dp_source, fn), os.path.join(dp_sequence, fn))
+            list_fp_movies.append(os.path.join(dp_source, "movie.mp4"))
+            
+        # Concatenate movies and save
+        fp_final = os.path.join(dp_multi, "movie.mp4")
+        concatenate_movies(fp_final, list_fp_movies)
+        return fp_final
+        
+                
 
 def get_img_rand():
     return (255*np.random.rand(self.height,self.width,3)).astype(np.uint8)
@@ -286,120 +370,150 @@ def generate_list_output(
     
     return list_output
 
-
         
 if __name__ == "__main__":    
     
-    # fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_768-ema-pruned.ckpt" 
-    fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_512-ema-pruned.ckpt" 
-    sdh = StableDiffusionHolder(fp_ckpt)
-    
-    self = BlendingFrontend(sdh) # Yes this is possible in python and yes it is an awesome trick
+    fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_768-ema-pruned.ckpt" 
+    # fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_512-ema-pruned.ckpt" 
+    self = BlendingFrontend(StableDiffusionHolder(fp_ckpt)) # Yes this is possible in python and yes it is an awesome trick
     # self = BlendingFrontend(None) # Yes this is possible in python and yes it is an awesome trick
     
     dict_ui_elem = {}
     
     with gr.Blocks() as demo:
-        with gr.Row():
-            prompt1 = gr.Textbox(label="prompt 1")
-            prompt2 = gr.Textbox(label="prompt 2")
-        
-        with gr.Row():
-            duration_compute = gr.Slider(5, 45, self.t_compute_max_allowed, step=1, label='compute budget for transition (seconds)', interactive=True) 
-            duration_video = gr.Slider(0.1, 30, self.duration_video, step=0.1, label='result video duration (seconds)', interactive=True) 
-            height = gr.Slider(256, 2048, self.height, step=128, label='height', interactive=True)
-            width = gr.Slider(256, 2048, self.width, step=128, label='width', interactive=True) 
+        with gr.Tab("Single Transition"):
+            with gr.Row():
+                prompt1 = gr.Textbox(label="prompt 1")
+                prompt2 = gr.Textbox(label="prompt 2")
             
-        with gr.Accordion("Advanced Settings (click to expand)", open=False):
-
-            with gr.Accordion("Diffusion settings", open=True):
-                with gr.Row():
-                    num_inference_steps = gr.Slider(5, 100, self.num_inference_steps, step=1, label='num_inference_steps', interactive=True)
-                    guidance_scale = gr.Slider(1, 25, self.guidance_scale, step=0.1, label='guidance_scale', interactive=True) 
-                    negative_prompt = gr.Textbox(label="negative prompt")          
-            
-            with gr.Accordion("Seeds control", open=True):
-                with gr.Row():
-                    seed1 = gr.Number(420, label="seed 1", interactive=True)
-                    b_newseed1 = gr.Button("randomize seed 1", variant='secondary')
-                    seed2 = gr.Number(420, label="seed 2", interactive=True)
-                    b_newseed2 = gr.Button("randomize seed 2", variant='secondary')
-                    
-            with gr.Accordion("Crossfeeding for last image", open=True):
-                with gr.Row():
-                    branch1_influence = gr.Slider(0.0, 1.0, self.branch1_influence, step=0.01, label='crossfeed power', interactive=True) 
-                    branch1_max_depth_influence = gr.Slider(0.0, 1.0, self.branch1_max_depth_influence, step=0.01, label='crossfeed range', interactive=True) 
-                    branch1_influence_decay = gr.Slider(0.0, 1.0, self.branch1_influence_decay, step=0.01, label='crossfeed decay', interactive=True) 
-
-            with gr.Accordion("Transition settings", open=True):
-                with gr.Row():
-                    depth_strength = gr.Slider(0.01, 0.99, self.depth_strength, step=0.01, label='depth_strength', interactive=True) 
-                    guidance_scale_mid_damper = gr.Slider(0.01, 2.0, self.guidance_scale_mid_damper, step=0.01, label='guidance_scale_mid_damper', interactive=True) 
-                    parental_influence = gr.Slider(0.0, 1.0, self.parental_influence, step=0.01, label='parental power', interactive=True) 
-                    parental_max_depth_influence = gr.Slider(0.0, 1.0, self.parental_max_depth_influence, step=0.01, label='parental range', interactive=True) 
-                    parental_influence_decay = gr.Slider(0.0, 1.0, self.parental_influence_decay, step=0.01, label='parental decay', interactive=True) 
-        
+            with gr.Row():
+                duration_compute = gr.Slider(5, 45, self.t_compute_max_allowed, step=1, label='compute budget for transition (seconds)', interactive=True) 
+                duration_video = gr.Slider(0.1, 30, self.duration_video, step=0.1, label='result video duration (seconds)', interactive=True) 
+                height = gr.Slider(256, 2048, self.height, step=128, label='height', interactive=True)
+                width = gr.Slider(256, 2048, self.width, step=128, label='width', interactive=True) 
                 
-        with gr.Row():
-            b_compute1 = gr.Button('compute first image', variant='primary')
-            b_compute_transition = gr.Button('compute transition', variant='primary')
-            b_compute2 = gr.Button('compute last image', variant='primary')
-        
-        with gr.Row():
-            img1 = gr.Image(label="1/5")
-            img2 = gr.Image(label="2/5")
-            img3 = gr.Image(label="3/5")
-            img4 = gr.Image(label="4/5")
-            img5 = gr.Image(label="5/5")
-        
-        with gr.Row():
-            vid_transition = gr.Video()
+            with gr.Accordion("Advanced Settings (click to expand)", open=False):
+    
+                with gr.Accordion("Diffusion settings", open=True):
+                    with gr.Row():
+                        num_inference_steps = gr.Slider(5, 100, self.num_inference_steps, step=1, label='num_inference_steps', interactive=True)
+                        guidance_scale = gr.Slider(1, 25, self.guidance_scale, step=0.1, label='guidance_scale', interactive=True) 
+                        negative_prompt = gr.Textbox(label="negative prompt")          
+                
+                with gr.Accordion("Seeds control", open=True):
+                    with gr.Row():
+                        seed1 = gr.Number(self.seed1, label="seed 1", interactive=True)
+                        b_newseed1 = gr.Button("randomize seed 1", variant='secondary')
+                        seed2 = gr.Number(self.seed2, label="seed 2", interactive=True)
+                        b_newseed2 = gr.Button("randomize seed 2", variant='secondary')
+                        
+                with gr.Accordion("Crossfeeding for last image", open=True):
+                    with gr.Row():
+                        branch1_influence = gr.Slider(0.0, 1.0, self.branch1_influence, step=0.01, label='crossfeed power', interactive=True) 
+                        branch1_max_depth_influence = gr.Slider(0.0, 1.0, self.branch1_max_depth_influence, step=0.01, label='crossfeed range', interactive=True) 
+                        branch1_influence_decay = gr.Slider(0.0, 1.0, self.branch1_influence_decay, step=0.01, label='crossfeed decay', interactive=True) 
+    
+                with gr.Accordion("Transition settings", open=True):
+                    with gr.Row():
+                        depth_strength = gr.Slider(0.01, 0.99, self.depth_strength, step=0.01, label='depth_strength', interactive=True) 
+                        guidance_scale_mid_damper = gr.Slider(0.01, 2.0, self.guidance_scale_mid_damper, step=0.01, label='guidance_scale_mid_damper', interactive=True) 
+                        parental_influence = gr.Slider(0.0, 1.0, self.parental_influence, step=0.01, label='parental power', interactive=True) 
+                        parental_max_depth_influence = gr.Slider(0.0, 1.0, self.parental_max_depth_influence, step=0.01, label='parental range', interactive=True) 
+                        parental_influence_decay = gr.Slider(0.0, 1.0, self.parental_influence_decay, step=0.01, label='parental decay', interactive=True) 
             
-        with gr.Row():
-            b_stackforward = gr.Button('multi-movie start next segment (move last image -> first image)')
-        
-        # Collect all UI elemts in list to easily pass as inputs
-        dict_ui_elem["prompt1"] = prompt1
-        dict_ui_elem["negative_prompt"] = negative_prompt
-        dict_ui_elem["prompt2"] = prompt2
-         
-        dict_ui_elem["duration_compute"] = duration_compute
-        dict_ui_elem["duration_video"] = duration_video
-        dict_ui_elem["height"] = height
-        dict_ui_elem["width"] = width
-         
-        dict_ui_elem["depth_strength"] = depth_strength
-        dict_ui_elem["branch1_influence"] = branch1_influence
-        dict_ui_elem["branch1_max_depth_influence"] = branch1_max_depth_influence
-        dict_ui_elem["branch1_influence_decay"] = branch1_influence_decay
-        
-        dict_ui_elem["num_inference_steps"] = num_inference_steps
-        dict_ui_elem["guidance_scale"] = guidance_scale
-        dict_ui_elem["guidance_scale_mid_damper"] = guidance_scale_mid_damper
-        dict_ui_elem["seed1"] = seed1
-        dict_ui_elem["seed2"] = seed2
-        
-        dict_ui_elem["parental_max_depth_influence"] = parental_max_depth_influence
-        dict_ui_elem["parental_influence"] = parental_influence
-        dict_ui_elem["parental_influence_decay"] = parental_influence_decay
-        
-        # Convert to list, as gradio doesn't seem to accept dicts
-        list_ui_elem = []
-        list_ui_keys = []
-        for k in dict_ui_elem.keys():
-            list_ui_elem.append(dict_ui_elem[k])
-            list_ui_keys.append(k)
-        self.list_ui_keys = list_ui_keys
-        
-        b_newseed1.click(self.randomize_seed1, outputs=seed1)
-        b_newseed2.click(self.randomize_seed2, outputs=seed2)
-        b_compute1.click(self.compute_img1, inputs=list_ui_elem, outputs=[img1, img2, img3, img4, img5])
-        b_compute2.click(self.compute_img2, inputs=list_ui_elem, outputs=[img2, img3, img4, img5])
-        b_compute_transition.click(self.compute_transition, 
-                                    inputs=list_ui_elem,
-                                    outputs=[img2, img3, img4, vid_transition])
-        
-        b_stackforward.click(self.stack_forward, 
-                      inputs=[prompt2, seed2], 
-                      outputs=[img1, img2, img3, img4, img5, prompt1, seed1, prompt2])
+                    
+            with gr.Row():
+                b_compute1 = gr.Button('compute first image', variant='primary')
+                b_compute_transition = gr.Button('compute transition', variant='primary')
+                b_compute2 = gr.Button('compute last image', variant='primary')
+            
+            with gr.Row():
+                img1 = gr.Image(label="1/5")
+                img2 = gr.Image(label="2/5")
+                img3 = gr.Image(label="3/5")
+                img4 = gr.Image(label="4/5")
+                img5 = gr.Image(label="5/5")
+            
+            with gr.Row():
+                vid_transition = gr.Video()
+                
+            with gr.Row():
+                b_stackforward = gr.Button('multi-movie start next segment (move last image -> first image)')
+            
+            # Collect all UI elemts in list to easily pass as inputs
+            dict_ui_elem["prompt1"] = prompt1
+            dict_ui_elem["negative_prompt"] = negative_prompt
+            dict_ui_elem["prompt2"] = prompt2
+             
+            dict_ui_elem["duration_compute"] = duration_compute
+            dict_ui_elem["duration_video"] = duration_video
+            dict_ui_elem["height"] = height
+            dict_ui_elem["width"] = width
+             
+            dict_ui_elem["depth_strength"] = depth_strength
+            dict_ui_elem["branch1_influence"] = branch1_influence
+            dict_ui_elem["branch1_max_depth_influence"] = branch1_max_depth_influence
+            dict_ui_elem["branch1_influence_decay"] = branch1_influence_decay
+            
+            dict_ui_elem["num_inference_steps"] = num_inference_steps
+            dict_ui_elem["guidance_scale"] = guidance_scale
+            dict_ui_elem["guidance_scale_mid_damper"] = guidance_scale_mid_damper
+            dict_ui_elem["seed1"] = seed1
+            dict_ui_elem["seed2"] = seed2
+            
+            dict_ui_elem["parental_max_depth_influence"] = parental_max_depth_influence
+            dict_ui_elem["parental_influence"] = parental_influence
+            dict_ui_elem["parental_influence_decay"] = parental_influence_decay
+            
+            # Convert to list, as gradio doesn't seem to accept dicts
+            list_ui_elem = []
+            list_ui_keys = []
+            for k in dict_ui_elem.keys():
+                list_ui_elem.append(dict_ui_elem[k])
+                list_ui_keys.append(k)
+            self.list_ui_keys = list_ui_keys
+            
+            b_newseed1.click(self.randomize_seed1, outputs=seed1)
+            b_newseed2.click(self.randomize_seed2, outputs=seed2)
+            b_compute1.click(self.compute_img1, inputs=list_ui_elem, outputs=[img1, img2, img3, img4, img5])
+            b_compute2.click(self.compute_img2, inputs=list_ui_elem, outputs=[img2, img3, img4, img5])
+            b_compute_transition.click(self.compute_transition, 
+                                        inputs=list_ui_elem,
+                                        outputs=[img2, img3, img4, vid_transition])
+            
+            b_stackforward.click(self.stack_forward, 
+                          inputs=[prompt2, seed2], 
+                          outputs=[img1, img2, img3, img4, img5, prompt1, seed1, prompt2])
+            
+        with gr.Tab("Multi Transition"):
+            with gr.Row():
+                multi_img1_prev = gr.Image(value=self.list_imgs_shown_last[0], label="1/5")
+                multi_img2_prev = gr.Image(value=self.list_imgs_shown_last[1], label="2/5")
+                multi_img3_prev = gr.Image(value=self.list_imgs_shown_last[2], label="3/5")
+                multi_img4_prev = gr.Image(value=self.list_imgs_shown_last[3], label="4/5")
+                multi_img5_prev = gr.Image(value=self.list_imgs_shown_last[4], label="5/5")
+            
+            with gr.Row():
+                b_older = gr.Button("show older")
+                b_newer = gr.Button("show newer")
+                text_timestamp = gr.Textbox(label="created", interactive=False)
+                b_append = gr.Button("append this transition")
+             
+            with gr.Row():
+                text_all_timestamps = gr.Textbox(label="movie list", interactive=False)
+            with gr.Row():
+                b_reset = gr.Button("reset")
+                b_concat = gr.Button("merge together", variant='primary')
+            
+            with gr.Row():
+                vid_multi = gr.Video()
+            
+            
+            b_older.click(self.multi_trans_show_older, inputs=[], outputs=[multi_img1_prev, multi_img2_prev, multi_img3_prev, multi_img4_prev, multi_img5_prev, text_timestamp])
+            b_newer.click(self.multi_trans_show_newer, inputs=[], outputs=[multi_img1_prev, multi_img2_prev, multi_img3_prev, multi_img4_prev, multi_img5_prev, text_timestamp])
+            b_append.click(self.multi_append, inputs=[], outputs=[text_all_timestamps])
+            b_reset.click(self.multi_reset, inputs=[], outputs=[text_all_timestamps])
+            b_concat.click(self.multi_concat, inputs=[], outputs=[vid_multi])
+            
+            
     demo.launch(share=self.share, inbrowser=True, inline=False)
