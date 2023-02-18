@@ -727,64 +727,6 @@ class LatentBlending():
         return torch.randn((1, C, H, W), generator=generator, device=self.sdh.device)
     
 
-    def run_multi_transition(
-            self,
-            fp_movie: str, 
-            list_prompts: List[str],
-            list_seeds: List[int] = None,
-            fps: float = 24,
-            duration_single_trans: float = 15,
-        ):
-        r"""
-        Runs multiple transitions and stitches them together. You can supply the seeds for each prompt.
-        Args:
-            fp_movie: file path for movie saving
-            list_prompts: List[float]:
-                list of the prompts. There will be a transition starting from the first to the last.
-            list_seeds: List[int] = None: 
-                Random Seeds for each prompt.
-            fps: float:
-                frames per second
-            duration_single_trans: float:
-                The duration of a single transition prompt[i] -> prompt[i+1].
-                The duration of your movie will be duration_single_trans * len(list_prompts)
-            
-        """
-        
-        if list_seeds is None:
-            list_seeds = list(np.random.randint(0, 10e10, len(list_prompts)))
-        assert len(list_prompts) == len(list_seeds), "Supply the same number of prompts and seeds"
-        
-        ms = MovieSaver(fp_movie, fps=fps)
-        
-        for i in range(len(list_prompts)-1):
-            print(f"Starting movie segment {i+1}/{len(list_prompts)-1}")
-            
-            if i==0:
-                self.set_prompt1(list_prompts[i])
-                self.set_prompt2(list_prompts[i+1])
-                recycle_img1 = False
-            else:
-                self.swap_forward()
-                self.set_prompt2(list_prompts[i+1])
-                recycle_img1 = True    
-            
-            local_seeds = [list_seeds[i], list_seeds[i+1]]
-            list_imgs = self.run_transition(recycle_img1=recycle_img1, fixed_seeds=local_seeds)
-            list_imgs_interp = add_frames_linear_interp(list_imgs, fps, duration_single_trans)
-            
-            if i==0:
-                self.multi_transition_img_first = list_imgs[0]
-            
-            # Save movie frame
-            for img in list_imgs_interp:
-                ms.write_frame(img)
-                
-        ms.finalize()
-        self.multi_transition_img_last = list_imgs[-1]
-        
-        print("run_multi_transition: All completed.")
-
 
     @torch.no_grad()
     def run_diffusion(
@@ -1018,6 +960,10 @@ class LatentBlending():
     def write_imgs_transition(self, dp_img):
         r"""
         Writes the transition images into the folder dp_img.
+        Requires run_transition to be completed.
+        Args:
+            dp_img: str
+                Directory, into which the transition images, yaml file and latents are written.
         """
         imgs_transition = self.tree_final_imgs
         os.makedirs(dp_img, exist_ok=True)
@@ -1027,6 +973,32 @@ class LatentBlending():
         
         fp_yml = os.path.join(dp_img, "lowres.yaml") 
         self.save_statedict(fp_yml)
+        
+    def write_movie_transition(self, fp_movie, duration_transition, fps=30):
+        r"""
+        Writes the transition movie to fp_movie, using the given duration and fps..
+        The missing frames are linearly interpolated.
+        Args:
+            fp_movie: str
+                file pointer to the final movie.
+            duration_transition: float
+                duration of the movie in seonds
+            fps: int
+                fps of the movie
+                
+        """
+        
+        # Let's get more cheap frames via linear interpolation (duration_transition*fps frames)
+        imgs_transition_ext = add_frames_linear_interp(self.tree_final_imgs, duration_transition, fps)
+
+        # Save as MP4
+        if os.path.isfile(fp_movie):
+            os.remove(fp_movie)
+        ms = MovieSaver(fp_movie, fps=fps, shape_hw=[self.sdh.height, self.sdh.width])
+        for img in tqdm(imgs_transition_ext):
+            ms.write_frame(img)
+        ms.finalize()
+
         
         
     def save_statedict(self, fp_yml):
