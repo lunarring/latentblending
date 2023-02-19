@@ -138,7 +138,7 @@ class BlendingFrontend():
         self.lb.num_inference_steps = list_ui_elem[list_ui_keys.index('num_inference_steps')]
         self.lb.sdh.num_inference_steps = list_ui_elem[list_ui_keys.index('num_inference_steps')]
         self.duration_video = list_ui_elem[list_ui_keys.index('duration_video')]
-        self.lb.seed1 = list_ui_elem[list_ui_keys.index('seed1')]
+        self.lb.seed1 = list_ui_elem[list_ui_keys.index('seed1')] #seed
         self.lb.seed2 = list_ui_elem[list_ui_keys.index('seed2')]
         
         self.lb.branch1_influence = list_ui_elem[list_ui_keys.index('branch1_influence')]
