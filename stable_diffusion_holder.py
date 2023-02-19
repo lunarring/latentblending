@@ -218,37 +218,6 @@ class StableDiffusionHolder:
         if len(self.negative_prompt) > 1:
             self.negative_prompt = [self.negative_prompt[0]]
 
-    def init_inpainting(
-            self, 
-            image_source: Union[Image.Image, np.ndarray] = None, 
-            mask_image: Union[Image.Image, np.ndarray] = None, 
-            init_empty: Optional[bool] = False,
-        ):
-        r"""
-        Initializes inpainting with a source and maks image.
-        Args:
-            image_source: Union[Image.Image, np.ndarray]
-                Source image onto which the mask will be applied.
-            mask_image: Union[Image.Image, np.ndarray]
-                Mask image, value = 0 will stay untouched, value = 255 subjet to diffusion
-            init_empty: Optional[bool]:
-                Initialize inpainting with an empty image and mask, effectively disabling inpainting,
-                useful for generating a first image for transitions using diffusion.
-        """
-        if not init_empty:
-            assert image_source is not None, "init_inpainting: you need to provide image_source"
-            assert mask_image is not None, "init_inpainting: you need to provide mask_image"
-            if type(image_source) == np.ndarray:
-                image_source = Image.fromarray(image_source)
-            self.image_source = image_source
-            
-            if type(mask_image) == np.ndarray:
-                mask_image = Image.fromarray(mask_image)
-            self.mask_image = mask_image
-        else:
-            self.mask_image  = self.mask_empty
-            self.image_source  = self.image_empty
-
 
     def get_text_embedding(self, prompt):
         c = self.model.get_learned_conditioning(prompt)
@@ -282,6 +251,7 @@ class StableDiffusionHolder:
             idx_start: int = 0, 
             list_latents_mixing = None, 
             mixing_coeffs = 0.0,
+            spatial_mask = None,
             return_image: Optional[bool] = False,
         ):
         r"""
@@ -295,7 +265,7 @@ class StableDiffusionHolder:
             idx_start: int
                 Index of the diffusion process start and where the latents_for_injection are injected
             mixing_coeff:
-                # FIXME
+                # FIXME spatial_mask
             return_image: Optional[bool]
                 Optionally return image directly
             
@@ -312,6 +282,7 @@ class StableDiffusionHolder:
         
         if np.sum(list_mixing_coeffs) > 0:
             assert len(list_latents_mixing) == self.num_inference_steps
+        
         
         precision_scope = autocast if self.precision == "autocast" else nullcontext
         
@@ -345,6 +316,10 @@ class StableDiffusionHolder:
                     if i > 0 and list_mixing_coeffs[i]>0:
                         latents_mixtarget = list_latents_mixing[i-1].clone()
                         latents = interpolate_spherical(latents, latents_mixtarget, list_mixing_coeffs[i])
+                        
+                    if spatial_mask is not None and list_latents_mixing is not None:
+                        latents = interpolate_spherical(latents, list_latents_mixing[i-1], 1-spatial_mask)
+                        # latents[:,:,-15:,:] = latents_mixtarget[:,:,-15:,:]
                     
                     index = total_steps - i - 1
                     ts = torch.full((1,), step, device=self.device, dtype=torch.long)
