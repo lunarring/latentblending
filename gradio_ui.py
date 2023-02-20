@@ -58,7 +58,7 @@ class BlendingFrontend():
         
         self.init_save_dir()
         self.save_empty_image()
-        self.share = False
+        self.share = True
         self.transition_can_be_computed = False
         self.depth_strength = 0.25
         self.seed1 = 420
@@ -260,9 +260,7 @@ class BlendingFrontend():
         list_out.append("")
         list_out.append(np.random.randint(0, 10000000))
         print(f"stack_forward: fp_multi {fp_multi}")
-        
         return list_out
-    
 
        
     def multi_concat(self):
