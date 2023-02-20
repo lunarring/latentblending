@@ -183,19 +183,17 @@ def concatenate_movies(fp_final: str, list_fp_movies: List[str]):
         list_concat.append(f"""file '{fp_part}'""")
     
     # save this list
-    fp_list = fp_final[:-3] + "txt"
+    fp_list = "tmp_move.txt"
     with open(fp_list, "w") as fa:
         for item in list_concat:
             fa.write("%s\n" % item)
             
     cmd = f'ffmpeg -f concat -safe 0 -i {fp_list} -c copy {fp_final}'
     dp_movie = os.path.split(fp_final)[0]
-    if len(dp_movie) > 0:
-    	subprocess.call(cmd, shell=True, cwd=dp_movie)
-    else:
-        subprocess.call(cmd, shell=True)
+    subprocess.call(cmd, shell=True)
     os.remove(fp_list)
-    print(f"concatenate_movies: success! Watch here: {fp_final}")
+    if os.path.isfile(fp_final):
+        print(f"concatenate_movies: success! Watch here: {fp_final}")
 
             
 class MovieReader():
