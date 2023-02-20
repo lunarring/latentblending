@@ -265,7 +265,9 @@ class StableDiffusionHolder:
             idx_start: int
                 Index of the diffusion process start and where the latents_for_injection are injected
             mixing_coeff:
-                # FIXME spatial_mask
+                mixing coefficients for latent blending
+            spatial_mask:
+                experimental feature for enforcing pixels from list_latents_mixing
             return_image: Optional[bool]
                 Optionally return image directly
             
@@ -352,15 +354,6 @@ class StableDiffusionHolder:
         ):
         r"""
         Diffusion upscaling version. 
-        # FIXME
-        Args:
-            ??
-            latents_for_injection: torch.FloatTensor 
-                Latents that are used for injection
-            idx_start: int
-                Index of the diffusion process start and where the latents_for_injection are injected
-            return_image: Optional[bool]
-                Optionally return image directly
         """
  
         # Asserts
@@ -376,7 +369,6 @@ class StableDiffusionHolder:
             assert len(list_latents_mixing) == self.num_inference_steps
         
         precision_scope = autocast if self.precision == "autocast" else nullcontext
-        generator = torch.Generator(device=self.device).manual_seed(int(self.seed))
         
         h = uc_full['c_concat'][0].shape[2]        
         w = uc_full['c_concat'][0].shape[3]  
