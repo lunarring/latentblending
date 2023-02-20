@@ -5,11 +5,27 @@
 - A value close to zero results in more creative and intricate outcomes, but may also introduce additional objects and motion.
 - A value closer to one indicates a simpler alpha blending.
 
-## branch1_influence
-- Determines the extent to which the initial branch affects the final branch. This generally improves the transitions!
-- A value of 0.0 disables this crossfeeding.
-- A value of 1.0 fully copies the latents from the first branch to the second.
-- Before the tree branches out into multiple parts, crossfeeding occurs at a specific point, known as list_injection_idx[1]. The precise location is determined by a value called branch1_fract_crossfeed, which ranges from 0.0 to 1.0.
+## branch1_crossfeed_power
+- Controls the level of cross-feeding between the first and last image branch. This allows to preserve structures from the first image.
+- A value of 0.0 disables crossfeeding.
+- A value of 1.0 fully copies the latents from the first branch to the last.
+
+## branch1_crossfeed_range
+- Sets the duration of active crossfeed during development. High values enforce strong structural similarity.
+- The value x ranges from [0,1], and the crossfeeding is deactivated after x*num_inference_steps steps
+
+## branch1_crossfeed_decay
+- Sets decay for branch1_crossfeed_power. Lower values make the decay stronger across the range
+- The value x ranges from [0,1], and the branch1_crossfeed_power is decreased until the end of the branch1_crossfeed_range to a value of x*branch1_crossfeed_power
+
+## parental_crossfeed_power
+Similar to branch1_crossfeed_power, however applied for the images withinin the transition.
+
+## parental_crossfeed_range
+Similar to branch1_crossfeed_range, however applied for the images withinin the transition.
+
+## parental_crossfeed_power_decay
+Similar to branch1_crossfeed_decay, however applied for the images withinin the transition.
 
 ## guidance_scale
 - Higher guidance scale encourages the creation of images that are closely aligned with the text.
