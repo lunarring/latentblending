@@ -15,7 +15,7 @@
 - The value x ranges from [0,1], and the crossfeeding is deactivated after x*num_inference_steps steps
 
 ## branch1_crossfeed_decay
-- Sets decay for branch1_crossfeed_power. Lower values make the decay stronger across the range
+- Sets decay for branch1_crossfeed_power. Lower values make the decay stronger across the range.
 - The value x ranges from [0,1], and the branch1_crossfeed_power is decreased until the end of the branch1_crossfeed_range to a value of x*branch1_crossfeed_power
 
 ## parental_crossfeed_power

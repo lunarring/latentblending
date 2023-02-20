@@ -164,6 +164,39 @@ class LatentBlending():
         self.guidance_scale = guidance_scale_effective
         self.sdh.guidance_scale = guidance_scale_effective
 
+    
+    def set_branch1_crossfeed(self, crossfeed_power, crossfeed_range, crossfeed_decay):
+        r"""
+        Sets the crossfeed parameters for the first branch to the last branch.
+        Args:
+            crossfeed_power: float [0,1]
+                Controls the level of cross-feeding between the first and last image branch.
+            crossfeed_range: float [0,1]
+                Sets the duration of active crossfeed during development.
+            crossfeed_decay: float [0,1]
+                Sets decay for branch1_crossfeed_power. Lower values make the decay stronger across the range.
+        """
+        self.branch1_crossfeed_power = np.clip(crossfeed_power, 0, 1)
+        self.branch1_crossfeed_range = np.clip(crossfeed_range, 0, 1)
+        self.branch1_crossfeed_decay = np.clip(crossfeed_decay, 0, 1)
+        
+    
+    def set_parental_crossfeed(self, crossfeed_power, crossfeed_range, crossfeed_decay):
+        r"""
+        Sets the crossfeed parameters for all transition images (within the first and last branch).
+        Args:
+            crossfeed_power: float [0,1]
+                Controls the level of cross-feeding from the parental branches  
+            crossfeed_range: float [0,1]
+                Sets the duration of active crossfeed during development.
+            crossfeed_decay: float [0,1]
+                Sets decay for branch1_crossfeed_power. Lower values make the decay stronger across the range.
+        """
+        self.parental_crossfeed_power = np.clip(crossfeed_power, 0, 1)
+        self.parental_crossfeed_range = np.clip(crossfeed_range, 0, 1)
+        self.parental_crossfeed_power_decay = np.clip(crossfeed_decay, 0, 1)
+
+
     def set_prompt1(self, prompt: str):
         r"""
         Sets the first prompt (for the first keyframe) including text embeddings.
