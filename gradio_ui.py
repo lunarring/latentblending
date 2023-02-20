@@ -59,6 +59,7 @@ class BlendingFrontend():
         self.init_save_dir()
         self.save_empty_image()
         self.share = False
+        self.transition_can_be_computed = False
         self.depth_strength = 0.25
         self.seed1 = 420
         self.seed2 = 420
@@ -69,14 +70,12 @@ class BlendingFrontend():
         self.prompt2 = ""
         self.negative_prompt = ""
         self.state_current = {}
-        self.branch1_influence = 0.3
-        self.branch1_max_depth_influence = 0.6
-        self.branch1_influence_decay = 0.3
-        self.parental_influence = 0.1
-        self.parental_max_depth_influence = 1.0
-        self.parental_influence_decay = 1.0    
-        self.nmb_branches_final = 9
-        self.nmb_imgs_show = 5 # don't change
+        self.branch1_crossfeed_power = self.lb.branch1_crossfeed_power
+        self.branch1_crossfeed_range = self.lb.branch1_crossfeed_range
+        self.branch1_crossfeed_decay = self.lb.branch1_crossfeed_decay
+        self.parental_crossfeed_power = self.lb.parental_crossfeed_power
+        self.parental_crossfeed_range = self.lb.parental_crossfeed_range
+        self.parental_crossfeed_power_decay = self.lb.parental_crossfeed_power_decay
         self.fps = 30
         self.duration_video = 10
         self.t_compute_max_allowed = 10
@@ -87,22 +86,20 @@ class BlendingFrontend():
         self.fp_img1 = None
         self.fp_img2 = None
         self.multi_idx_current = -1
-        self.multi_list_concat = []
         self.list_imgs_shown_last = 5*[self.fp_img_empty]
-        self.nmb_trans_stack = 6
-        
+        self.list_all_segments = []
+        self.dp_session = ""
         
         
     def init_save_dir(self):
         load_dotenv(find_dotenv(), verbose=False) 
-        self.dp_out = os.getenv("dp_out")
+        self.dp_out = os.getenv("DIR_OUT")
         if self.dp_out is None:
             self.dp_out = ""
         self.dp_imgs = os.path.join(self.dp_out, "imgs")
         os.makedirs(self.dp_imgs, exist_ok=True)
         self.dp_movies = os.path.join(self.dp_out, "movies")
         os.makedirs(self.dp_movies, exist_ok=True)
-        
         
         
         # make dummy image
@@ -112,7 +109,11 @@ class BlendingFrontend():
         
         
     def randomize_seed1(self):
-        seed = np.random.randint(0, 10000000)
+        # Dont randomize seed if we are in a multi concat mode. we don't want to change this one otherwise the movie breaks
+        if len(self.list_all_segments) > 0:
+            seed = self.seed1
+        else:
+            seed = np.random.randint(0, 10000000)
         self.seed1 = int(seed)
         print(f"randomize_seed1: new seed = {self.seed1}")
         return seed
@@ -141,12 +142,12 @@ class BlendingFrontend():
         self.lb.seed1 = list_ui_elem[list_ui_keys.index('seed1')] #seed
         self.lb.seed2 = list_ui_elem[list_ui_keys.index('seed2')]
         
-        self.lb.branch1_influence = list_ui_elem[list_ui_keys.index('branch1_influence')]
-        self.lb.branch1_max_depth_influence = list_ui_elem[list_ui_keys.index('branch1_max_depth_influence')]
-        self.lb.branch1_influence_decay = list_ui_elem[list_ui_keys.index('branch1_influence_decay')]
-        self.lb.parental_influence = list_ui_elem[list_ui_keys.index('parental_influence')]
-        self.lb.parental_max_depth_influence = list_ui_elem[list_ui_keys.index('parental_max_depth_influence')]
-        self.lb.parental_influence_decay = list_ui_elem[list_ui_keys.index('parental_influence_decay')]
+        self.lb.branch1_crossfeed_power = list_ui_elem[list_ui_keys.index('branch1_crossfeed_power')]
+        self.lb.branch1_crossfeed_range = list_ui_elem[list_ui_keys.index('branch1_crossfeed_range')]
+        self.lb.branch1_crossfeed_decay = list_ui_elem[list_ui_keys.index('branch1_crossfeed_decay')]
+        self.lb.parental_crossfeed_power = list_ui_elem[list_ui_keys.index('parental_crossfeed_power')]
+        self.lb.parental_crossfeed_range = list_ui_elem[list_ui_keys.index('parental_crossfeed_range')]
+        self.lb.parental_crossfeed_power_decay = list_ui_elem[list_ui_keys.index('parental_crossfeed_power_decay')]
         self.num_inference_steps = list_ui_elem[list_ui_keys.index('num_inference_steps')]
         self.depth_strength = list_ui_elem[list_ui_keys.index('depth_strength')]
         
@@ -162,27 +163,26 @@ class BlendingFrontend():
         return [self.fp_img1, self.fp_img_empty, self.fp_img_empty, self.fp_img_empty, self.fp_img_empty]
     
     def compute_img2(self, *args):
+        if self.fp_img1 is None: # don't do anything
+            return [self.fp_img_empty, self.fp_img_empty, self.fp_img_empty, self.fp_img_empty]
         list_ui_elem = args
         self.setup_lb(list_ui_elem)
         self.fp_img2 = os.path.join(self.dp_imgs, f"img2_{get_time('second')}.jpg")
         img2 = Image.fromarray(self.lb.compute_latents2(return_image=True))
         img2.save(self.fp_img2)
         self.recycle_img2 = True
+        self.transition_can_be_computed = True
         return [self.fp_img_empty, self.fp_img_empty, self.fp_img_empty, self.fp_img2]
         
     def compute_transition(self, *args):
         
-        if not self.recycle_img1:
-            print("compute first image before transition")
-            return
-        if not self.recycle_img2:
-            print("compute last image before transition")
-            return
-        
+        if not self.transition_can_be_computed:
+            list_return = [self.fp_img_empty, self.fp_img_empty, self.fp_img_empty, self.fp_img_empty]
+            return list_return
         
         list_ui_elem = args
         self.setup_lb(list_ui_elem)
-        print("STARTING DIFFUSION!")
+        print("STARTING TRANSITION...")
         if self.use_debug:
             list_imgs = [(255*np.random.rand(self.height,self.width,3)).astype(np.uint8) for l in range(5)]
             list_imgs = [Image.fromarray(l) for l in list_imgs]
@@ -236,14 +236,21 @@ class BlendingFrontend():
     
     def stack_forward(self, prompt2, seed2):
         # Save preview images, prompts and seeds into dictionary for stacking
-        # self.list_imgs_shown_last = self.get_multi_trans_imgs_preview(f"lowres_{self.current_timestamp}")[0:5]
-        timestamp_section = get_time('second')
-        self.lb.write_imgs_transition(os.path.join(self.dp_out, f"lowres_{timestamp_section}"))
-        self.lb.write_imgs_transition(os.path.join(self.dp_out, "lowres_current"))
-        shutil.copyfile(self.fp_movie, os.path.join(self.dp_out, f"lowres_{timestamp_section}", "movie.mp4"))
+        if len(self.list_all_segments) == 0:
+            timestamp_session = get_time('second')
+            self.dp_session = os.path.join(self.dp_out, f"session_{timestamp_session}")
+            os.makedirs(self.dp_session)
+            
+        self.transition_can_be_computed = False
+
+        idx_segment = len(self.list_all_segments) 
+        dp_segment = os.path.join(self.dp_session, f"segment_{str(idx_segment).zfill(3)}")
+            
+        self.list_all_segments.append(dp_segment)
+        self.lb.write_imgs_transition(dp_segment)
+        shutil.copyfile(self.fp_movie, os.path.join(dp_segment, "movie.mp4"))
         
         self.lb.swap_forward()
-        self.multi_append()
         fp_multi = self.multi_concat()
         list_out = [fp_multi]
         list_out.extend([self.fp_img2])
@@ -252,52 +259,19 @@ class BlendingFrontend():
         list_out.append(gr.update(interactive=False, value=seed2))
         list_out.append("")
         list_out.append(np.random.randint(0, 10000000))
-        
         print(f"stack_forward: fp_multi {fp_multi}")
         
         return list_out
     
-    
-    def get_list_all_stacked(self):
-        list_all = os.listdir(os.path.join(self.dp_out))
-        list_all = [l for l in list_all if l[:8]=="lowres_2"]
-        list_all.sort()
-        return list_all
 
        
-    def multi_append(self):
-        list_all = self.get_list_all_stacked()
-        dn = list_all[self.multi_idx_current]
-        self.multi_list_concat.append(dn)
-        list_short = [dn[7:] for dn in self.multi_list_concat]
-        str_out = "\n".join(list_short)
-        return str_out
-       
-    def multi_reset(self):
-        self.multi_list_concat = []
-        str_out = ""
-        return str_out
-       
     def multi_concat(self):
-        # Make new output directory
-        dp_multi = os.path.join(self.dp_out, f"multi_{get_time('second')}")       
-        os.makedirs(dp_multi, exist_ok=False)
-        
-        # Copy all low-res folders (prepending multi001_xxxx), however leave out the movie.mp4
-        # also collect all movie.mp4
         list_fp_movies = []
-        for i, dn in enumerate(self.multi_list_concat):
-            dp_source = os.path.join(self.dp_out, dn)
-            dp_sequence = os.path.join(dp_multi, f"{str(i).zfill(3)}_{dn}")
-            os.makedirs(dp_sequence, exist_ok=False)
-            list_source = os.listdir(dp_source)
-            list_source = [l for l in list_source if not l.endswith(".mp4")]
-            for fn in list_source:
-                shutil.copyfile(os.path.join(dp_source, fn), os.path.join(dp_sequence, fn))
-            list_fp_movies.append(os.path.join(dp_source, "movie.mp4"))
-            
+        for dp_segment in self.list_all_segments:
+            list_fp_movies.append(os.path.join(dp_segment, "movie.mp4"))
+    
         # Concatenate movies and save
-        fp_final = os.path.join(dp_multi, "movie.mp4")
+        fp_final = os.path.join(self.dp_session, "movie.mp4")
         concatenate_movies(fp_final, list_fp_movies)
         return fp_final
 
@@ -312,36 +286,13 @@ class BlendingFrontend():
         return state_dict   
 
 
-def get_img_rand():
-    return (255*np.random.rand(self.height,self.width,3)).astype(np.uint8)
-
-def generate_list_output(
-        prompt1,
-        prompt2,
-        seed1,
-        seed2,
-        list_fp_imgs,
-        ):
-    list_output = []
-    list_output.append(prompt1)
-    list_output.append(prompt2)
-    list_output.append(seed1)
-    list_output.append(seed2)
-    for fp_img in list_fp_imgs:
-        list_output.append(fp_img)
-    
-    return list_output
-
-
         
 if __name__ == "__main__":    
     
     # fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_768-ema-pruned.ckpt" 
     fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_512-ema-pruned.ckpt" 
-    self = BlendingFrontend(StableDiffusionHolder(fp_ckpt)) # Yes this is possible in python and yes it is an awesome trick
-    # self = BlendingFrontend(None) # Yes this is possible in python and yes it is an awesome trick
-    
-    dict_ui_elem = {}
+    bf = BlendingFrontend(StableDiffusionHolder(fp_ckpt)) 
+    # self = BlendingFrontend(None) 
     
     with gr.Blocks() as demo:
         with gr.Tab("Single Transition"):
@@ -350,40 +301,40 @@ if __name__ == "__main__":
                 prompt2 = gr.Textbox(label="prompt 2")
             
             with gr.Row():
-                duration_compute = gr.Slider(5, 45, self.t_compute_max_allowed, step=1, label='compute budget for transition (seconds)', interactive=True) 
-                duration_video = gr.Slider(0.1, 30, self.duration_video, step=0.1, label='result video duration (seconds)', interactive=True) 
-                height = gr.Slider(256, 2048, self.height, step=128, label='height', interactive=True)
-                width = gr.Slider(256, 2048, self.width, step=128, label='width', interactive=True) 
+                duration_compute = gr.Slider(5, 200, bf.t_compute_max_allowed, step=1, label='compute budget for transition (seconds)', interactive=True) 
+                duration_video = gr.Slider(1, 100, bf.duration_video, step=0.1, label='result video duration (seconds)', interactive=True) 
+                height = gr.Slider(256, 2048, bf.height, step=128, label='height', interactive=True)
+                width = gr.Slider(256, 2048, bf.width, step=128, label='width', interactive=True) 
                 
             with gr.Accordion("Advanced Settings (click to expand)", open=False):
     
                 with gr.Accordion("Diffusion settings", open=True):
                     with gr.Row():
-                        num_inference_steps = gr.Slider(5, 100, self.num_inference_steps, step=1, label='num_inference_steps', interactive=True)
-                        guidance_scale = gr.Slider(1, 25, self.guidance_scale, step=0.1, label='guidance_scale', interactive=True) 
+                        num_inference_steps = gr.Slider(5, 100, bf.num_inference_steps, step=1, label='num_inference_steps', interactive=True)
+                        guidance_scale = gr.Slider(1, 25, bf.guidance_scale, step=0.1, label='guidance_scale', interactive=True) 
                         negative_prompt = gr.Textbox(label="negative prompt")          
                 
-                with gr.Accordion("Seeds control", open=True):
+                with gr.Accordion("Seed control: adjust seeds for first and last images", open=True):
                     with gr.Row():
                         b_newseed1 = gr.Button("randomize seed 1", variant='secondary')
-                        seed1 = gr.Number(self.seed1, label="seed 1", interactive=True)
-                        seed2 = gr.Number(self.seed2, label="seed 2", interactive=True)
+                        seed1 = gr.Number(bf.seed1, label="seed 1", interactive=True)
+                        seed2 = gr.Number(bf.seed2, label="seed 2", interactive=True)
                         b_newseed2 = gr.Button("randomize seed 2", variant='secondary')
                         
-                with gr.Accordion("Crossfeeding for last image", open=True):
+                with gr.Accordion("Last image crossfeeding.", open=True):
                     with gr.Row():
-                        branch1_influence = gr.Slider(0.0, 1.0, self.branch1_influence, step=0.01, label='crossfeed power', interactive=True) 
-                        branch1_max_depth_influence = gr.Slider(0.0, 1.0, self.branch1_max_depth_influence, step=0.01, label='crossfeed range', interactive=True) 
-                        branch1_influence_decay = gr.Slider(0.0, 1.0, self.branch1_influence_decay, step=0.01, label='crossfeed decay', interactive=True) 
+                        branch1_crossfeed_power = gr.Slider(0.0, 1.0, bf.branch1_crossfeed_power, step=0.01, label='branch1 crossfeed power', interactive=True) 
+                        branch1_crossfeed_range = gr.Slider(0.0, 1.0, bf.branch1_crossfeed_range, step=0.01, label='branch1 crossfeed range', interactive=True) 
+                        branch1_crossfeed_decay = gr.Slider(0.0, 1.0, bf.branch1_crossfeed_decay, step=0.01, label='branch1 crossfeed decay', interactive=True) 
     
                 with gr.Accordion("Transition settings", open=True):
                     with gr.Row():
-                        parental_influence = gr.Slider(0.0, 1.0, self.parental_influence, step=0.01, label='parental power', interactive=True) 
-                        parental_max_depth_influence = gr.Slider(0.0, 1.0, self.parental_max_depth_influence, step=0.01, label='parental range', interactive=True) 
-                        parental_influence_decay = gr.Slider(0.0, 1.0, self.parental_influence_decay, step=0.01, label='parental decay', interactive=True) 
+                        parental_crossfeed_power = gr.Slider(0.0, 1.0, bf.parental_crossfeed_power, step=0.01, label='parental crossfeed power', interactive=True) 
+                        parental_crossfeed_range = gr.Slider(0.0, 1.0, bf.parental_crossfeed_range, step=0.01, label='parental crossfeed range', interactive=True) 
+                        parental_crossfeed_power_decay = gr.Slider(0.0, 1.0, bf.parental_crossfeed_power_decay, step=0.01, label='parental crossfeed decay', interactive=True) 
                     with gr.Row():
-                        depth_strength = gr.Slider(0.01, 0.99, self.depth_strength, step=0.01, label='depth_strength', interactive=True) 
-                        guidance_scale_mid_damper = gr.Slider(0.01, 2.0, self.guidance_scale_mid_damper, step=0.01, label='guidance_scale_mid_damper', interactive=True) 
+                        depth_strength = gr.Slider(0.01, 0.99, bf.depth_strength, step=0.01, label='depth_strength', interactive=True) 
+                        guidance_scale_mid_damper = gr.Slider(0.01, 2.0, bf.guidance_scale_mid_damper, step=0.01, label='guidance_scale_mid_damper', interactive=True) 
             
                     
             with gr.Row():
@@ -404,10 +355,11 @@ if __name__ == "__main__":
                 
             with gr.Row():
                 # b_restart = gr.Button("RESTART EVERYTHING")
-                b_stackforward = gr.Button('multi-movie start next segment (move last image -> first image)', variant='primary')
+                b_stackforward = gr.Button('append last movie segment (left) to multi movie (right)', variant='primary')
                 
             
-            # Collect all UI elemts in list to easily pass as inputs
+            # Collect all UI elemts in list to easily pass as inputs in gradio
+            dict_ui_elem = {}
             dict_ui_elem["prompt1"] = prompt1
             dict_ui_elem["negative_prompt"] = negative_prompt
             dict_ui_elem["prompt2"] = prompt2
@@ -418,9 +370,9 @@ if __name__ == "__main__":
             dict_ui_elem["width"] = width
              
             dict_ui_elem["depth_strength"] = depth_strength
-            dict_ui_elem["branch1_influence"] = branch1_influence
-            dict_ui_elem["branch1_max_depth_influence"] = branch1_max_depth_influence
-            dict_ui_elem["branch1_influence_decay"] = branch1_influence_decay
+            dict_ui_elem["branch1_crossfeed_power"] = branch1_crossfeed_power
+            dict_ui_elem["branch1_crossfeed_range"] = branch1_crossfeed_range
+            dict_ui_elem["branch1_crossfeed_decay"] = branch1_crossfeed_decay
             
             dict_ui_elem["num_inference_steps"] = num_inference_steps
             dict_ui_elem["guidance_scale"] = guidance_scale
@@ -428,9 +380,9 @@ if __name__ == "__main__":
             dict_ui_elem["seed1"] = seed1
             dict_ui_elem["seed2"] = seed2
             
-            dict_ui_elem["parental_max_depth_influence"] = parental_max_depth_influence
-            dict_ui_elem["parental_influence"] = parental_influence
-            dict_ui_elem["parental_influence_decay"] = parental_influence_decay
+            dict_ui_elem["parental_crossfeed_range"] = parental_crossfeed_range
+            dict_ui_elem["parental_crossfeed_power"] = parental_crossfeed_power
+            dict_ui_elem["parental_crossfeed_power_decay"] = parental_crossfeed_power_decay
             
             # Convert to list, as gradio doesn't seem to accept dicts
             list_ui_elem = []
@@ -438,21 +390,19 @@ if __name__ == "__main__":
             for k in dict_ui_elem.keys():
                 list_ui_elem.append(dict_ui_elem[k])
                 list_ui_keys.append(k)
-            self.list_ui_keys = list_ui_keys
+            bf.list_ui_keys = list_ui_keys
             
-            b_newseed1.click(self.randomize_seed1, outputs=seed1)
-            b_newseed2.click(self.randomize_seed2, outputs=seed2)
-            b_compute1.click(self.compute_img1, inputs=list_ui_elem, outputs=[img1, img2, img3, img4, img5])
-            b_compute2.click(self.compute_img2, inputs=list_ui_elem, outputs=[img2, img3, img4, img5])
-            b_compute_transition.click(self.compute_transition, 
+            b_newseed1.click(bf.randomize_seed1, outputs=seed1)
+            b_newseed2.click(bf.randomize_seed2, outputs=seed2)
+            b_compute1.click(bf.compute_img1, inputs=list_ui_elem, outputs=[img1, img2, img3, img4, img5])
+            b_compute2.click(bf.compute_img2, inputs=list_ui_elem, outputs=[img2, img3, img4, img5])
+            b_compute_transition.click(bf.compute_transition, 
                                         inputs=list_ui_elem,
                                         outputs=[img2, img3, img4, vid_single])
             
-            b_stackforward.click(self.stack_forward, 
+            b_stackforward.click(bf.stack_forward, 
                           inputs=[prompt2, seed2], 
                           outputs=[vid_multi, img1, img2, img3, img4, img5, prompt1, seed1, prompt2])
 
-            # b_restart.click(self.multi_reset)
             
-            
-    demo.launch(share=self.share, inbrowser=True, inline=False)
+    demo.launch(share=bf.share, inbrowser=True, inline=False)

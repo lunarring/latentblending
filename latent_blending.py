@@ -109,13 +109,13 @@ class LatentBlending():
         self.list_nmb_branches = None
         
         # Mixing parameters
-        self.branch1_influence = 0.0
-        self.branch1_max_depth_influence = 0.65
-        self.branch1_influence_decay = 0.8
+        self.branch1_crossfeed_power = 0.1
+        self.branch1_crossfeed_range = 0.6
+        self.branch1_crossfeed_decay = 0.8
         
-        self.parental_influence = 0.0
-        self.parental_max_depth_influence = 1.0
-        self.parental_influence_decay = 1.0    
+        self.parental_crossfeed_power = 0.1
+        self.parental_crossfeed_range = 0.8
+        self.parental_crossfeed_power_decay = 0.8    
         
         self.branch1_insertion_completed = False
         self.set_guidance_scale(guidance_scale)
@@ -335,10 +335,10 @@ class LatentBlending():
         list_conditionings = self.get_mixed_conditioning(1)
         latents_start = self.get_noise(self.seed2)
         # Influence from branch1
-        if self.branch1_influence > 0.0:
+        if self.branch1_crossfeed_power > 0.0:
             # Set up the mixing_coeffs
-            idx_mixing_stop = int(round(self.num_inference_steps*self.branch1_max_depth_influence))
-            mixing_coeffs = list(np.linspace(self.branch1_influence, self.branch1_influence*self.branch1_influence_decay, idx_mixing_stop))     
+            idx_mixing_stop = int(round(self.num_inference_steps*self.branch1_crossfeed_range))
+            mixing_coeffs = list(np.linspace(self.branch1_crossfeed_power, self.branch1_crossfeed_power*self.branch1_crossfeed_decay, idx_mixing_stop))     
             mixing_coeffs.extend((self.num_inference_steps-idx_mixing_stop)*[0])
             list_latents_mixing = self.tree_latents[0]
             list_latents2 = self.run_diffusion(
@@ -385,11 +385,11 @@ class LatentBlending():
                 latents_parental = interpolate_spherical(latents_p1, latents_p2, fract_mixing_parental)
             list_latents_parental_mix.append(latents_parental)
 
-        idx_mixing_stop = int(round(self.num_inference_steps*self.parental_max_depth_influence))
-        mixing_coeffs = idx_injection*[self.parental_influence]
+        idx_mixing_stop = int(round(self.num_inference_steps*self.parental_crossfeed_range))
+        mixing_coeffs = idx_injection*[self.parental_crossfeed_power]
         nmb_mixing = idx_mixing_stop - idx_injection
         if nmb_mixing > 0:
-            mixing_coeffs.extend(list(np.linspace(self.parental_influence, self.parental_influence*self.parental_influence_decay, nmb_mixing)))     
+            mixing_coeffs.extend(list(np.linspace(self.parental_crossfeed_power, self.parental_crossfeed_power*self.parental_crossfeed_power_decay, nmb_mixing)))     
         mixing_coeffs.extend((self.num_inference_steps-len(mixing_coeffs))*[0])
         
         latents_start = list_latents_parental_mix[idx_injection-1]
@@ -793,8 +793,8 @@ class LatentBlending():
         grab_vars = ['prompt1', 'prompt2', 'seed1', 'seed2', 'height', 'width',
                      'num_inference_steps', 'depth_strength', 'guidance_scale',
                      'guidance_scale_mid_damper', 'mid_compression_scaler', 'negative_prompt',
-                     'branch1_influence', 'branch1_max_depth_influence', 'branch1_influence_decay'
-                     'parental_influence', 'parental_max_depth_influence', 'parental_influence_decay']
+                     'branch1_crossfeed_power', 'branch1_crossfeed_range', 'branch1_crossfeed_decay'
+                     'parental_crossfeed_power', 'parental_crossfeed_range', 'parental_crossfeed_power_decay']
         for v in grab_vars:
             if hasattr(self, v):
                 if v == 'seed1' or v == 'seed2':
@@ -1167,25 +1167,25 @@ if __name__ == "__main__":
     self.set_prompt2(prompt2)
     
     # Run latent blending
-    self.branch1_influence = 0.3
-    self.branch1_max_depth_influence = 0.4
+    self.branch1_crossfeed_power = 0.3
+    self.branch1_crossfeed_range = 0.4
     # self.run_transition(depth_strength=depth_strength, fixed_seeds=fixed_seeds)
     self.seed1=21312
     img1 =self.compute_latents1(True)
     #%
     self.seed2=1234121
-    self.branch1_influence = 0.7
-    self.branch1_max_depth_influence = 0.3
-    self.branch1_influence_decay = 0.3
+    self.branch1_crossfeed_power = 0.7
+    self.branch1_crossfeed_range = 0.3
+    self.branch1_crossfeed_decay = 0.3
     img2 =self.compute_latents2(True)
     # Image.fromarray(np.concatenate((img1, img2), axis=1))
     
     #%%
     t0  = time.time()
     self.t_compute_max_allowed = 30
-    self.parental_max_depth_influence = 1.0
-    self.parental_influence = 0.0
-    self.parental_influence_decay = 1.0    
+    self.parental_crossfeed_range = 1.0
+    self.parental_crossfeed_power = 0.0
+    self.parental_crossfeed_power_decay = 1.0    
     imgs_transition = self.run_transition(recycle_img1=True, recycle_img2=True)
     t1 = time.time()
     print(f"took: {t1-t0}s")
