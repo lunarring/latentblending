@@ -19,6 +19,7 @@ huggingface-hub==0.11.1
 idna==3.4
 kiwisolver==1.4.4
 lightning-utilities==0.5.0
+lpips==0.1.4 
 matplotlib==3.6.2
 multidict==6.0.4
 numpy==1.24.1
