@@ -162,7 +162,6 @@ class BlendingFrontend():
         list_latents = [torch.from_numpy(l).to(self.lb.device) for l in list_latents_cpu]
         return list_latents
     
-    
     def compute_img1(self, *args):
         list_ui_elem = args
         self.setup_lb(list_ui_elem)
@@ -281,7 +280,13 @@ class BlendingFrontend():
         
         shutil.copyfile(fp_movie_last, fp_movie_next)
         
+        self.lb.tree_latents[0] = self.load_latents(os.path.join(self.dp_imgs, f"img1_{self.user_id}.npy"))
+        self.lb.tree_latents[-1] = self.load_latents(os.path.join(self.dp_imgs, f"img2_{self.user_id}.npy"))
         self.lb.swap_forward()
+        
+        shutil.copyfile(os.path.join(self.dp_imgs, f"img2_{self.user_id}.npy"), os.path.join(self.dp_imgs, f"img1_{self.user_id}.npy"))
+        
+        
         fp_multi = self.multi_concat()
         list_out = [fp_multi]
         
