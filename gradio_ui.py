@@ -364,7 +364,7 @@ if __name__ == "__main__":
                 - guidance_scale: latent blending seems to prefer lower values here
                 - negative prompt: enter negative prompt here, applied for all images
                 
-                ## Last iamge crossfeeding
+                ## Last image crossfeeding
                 - branch1_crossfeed_power: Controls the level of cross-feeding between the first and last image branch. For preserving structures.
                 - branch1_crossfeed_range: Sets the duration of active crossfeed during development. High values enforce strong structural similarity.
                 - branch1_crossfeed_decay: Sets decay for branch1_crossfeed_power. Lower values make the decay stronger across the range.
