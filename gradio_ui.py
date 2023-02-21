@@ -294,8 +294,8 @@ if __name__ == "__main__":
             prompt2 = gr.Textbox(label="prompt 2")
         
         with gr.Row():
-            duration_compute = gr.Slider(5, 200, bf.t_compute_max_allowed, step=1, label='compute budget for transition (seconds)', interactive=True) 
-            duration_video = gr.Slider(1, 100, bf.duration_video, step=0.1, label='result video duration (seconds)', interactive=True) 
+            duration_compute = gr.Slider(5, 200, bf.t_compute_max_allowed, step=1, label='compute budget', interactive=True) 
+            duration_video = gr.Slider(1, 100, bf.duration_video, step=0.1, label='video duration', interactive=True) 
             height = gr.Slider(256, 2048, bf.height, step=128, label='height', interactive=True)
             width = gr.Slider(256, 2048, bf.width, step=128, label='width', interactive=True) 
             
@@ -350,6 +350,34 @@ if __name__ == "__main__":
             # b_restart = gr.Button("RESTART EVERYTHING")
             b_stackforward = gr.Button('append last movie segment (left) to multi movie (right)', variant='primary')
             
+        with gr.Row():
+            gr.Markdown(
+                """
+                # Parameters
+                ## Main
+                - compute budget: set your waiting time for the transition. high values = better quality
+                - video duration: seconds per segment
+                - height/width: in pixels
+                
+                ## Diffusion settings
+                - num_inference_steps: number of diffusion steps
+                - guidance_scale: latent blending seems to prefer lower values here
+                - negative prompt: enter negative prompt here, applied for all images
+                
+                ## Last iamge crossfeeding
+                - branch1_crossfeed_power: Controls the level of cross-feeding between the first and last image branch. For preserving structures.
+                - branch1_crossfeed_range: Sets the duration of active crossfeed during development. High values enforce strong structural similarity.
+                - branch1_crossfeed_decay: Sets decay for branch1_crossfeed_power. Lower values make the decay stronger across the range.
+                
+                ## Transition settings
+                - parental_crossfeed_power: Similar to branch1_crossfeed_power, however applied for the images withinin the transition.
+                - parental_crossfeed_range: Similar to branch1_crossfeed_range, however applied for the images withinin the transition.
+                - parental_crossfeed_power_decay: Similar to branch1_crossfeed_decay, however applied for the images withinin the transition.
+                - depth_strength: Determines when the blending process will begin in terms of diffusion steps. Low values more inventive but can cause motion.
+                - guidance_scale_mid_damper: Decreases the guidance scale in the middle of a transition.
+                """
+                )
+                        
         
         # Collect all UI elemts in list to easily pass as inputs in gradio
         dict_ui_elem = {}
@@ -397,5 +425,5 @@ if __name__ == "__main__":
                       inputs=[prompt2, seed2], 
                       outputs=[vid_multi, img1, img2, img3, img4, img5, prompt1, seed1, prompt2])
 
-            
+               
     demo.launch(share=bf.share, inbrowser=True, inline=False)
