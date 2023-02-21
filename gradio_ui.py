@@ -34,10 +34,6 @@ import copy
 from dotenv import find_dotenv, load_dotenv
 import shutil
 
-"""
-never hit compute trans -> multi movie add fail
-
-"""
 
 
 #%%
@@ -293,114 +289,113 @@ if __name__ == "__main__":
     # self = BlendingFrontend(None) 
     
     with gr.Blocks() as demo:
-        with gr.Tab("Single Transition"):
-            with gr.Row():
-                prompt1 = gr.Textbox(label="prompt 1")
-                prompt2 = gr.Textbox(label="prompt 2")
+        with gr.Row():
+            prompt1 = gr.Textbox(label="prompt 1")
+            prompt2 = gr.Textbox(label="prompt 2")
+        
+        with gr.Row():
+            duration_compute = gr.Slider(5, 200, bf.t_compute_max_allowed, step=1, label='compute budget for transition (seconds)', interactive=True) 
+            duration_video = gr.Slider(1, 100, bf.duration_video, step=0.1, label='result video duration (seconds)', interactive=True) 
+            height = gr.Slider(256, 2048, bf.height, step=128, label='height', interactive=True)
+            width = gr.Slider(256, 2048, bf.width, step=128, label='width', interactive=True) 
             
-            with gr.Row():
-                duration_compute = gr.Slider(5, 200, bf.t_compute_max_allowed, step=1, label='compute budget for transition (seconds)', interactive=True) 
-                duration_video = gr.Slider(1, 100, bf.duration_video, step=0.1, label='result video duration (seconds)', interactive=True) 
-                height = gr.Slider(256, 2048, bf.height, step=128, label='height', interactive=True)
-                width = gr.Slider(256, 2048, bf.width, step=128, label='width', interactive=True) 
-                
-            with gr.Accordion("Advanced Settings (click to expand)", open=False):
-    
-                with gr.Accordion("Diffusion settings", open=True):
-                    with gr.Row():
-                        num_inference_steps = gr.Slider(5, 100, bf.num_inference_steps, step=1, label='num_inference_steps', interactive=True)
-                        guidance_scale = gr.Slider(1, 25, bf.guidance_scale, step=0.1, label='guidance_scale', interactive=True) 
-                        negative_prompt = gr.Textbox(label="negative prompt")          
-                
-                with gr.Accordion("Seed control: adjust seeds for first and last images", open=True):
-                    with gr.Row():
-                        b_newseed1 = gr.Button("randomize seed 1", variant='secondary')
-                        seed1 = gr.Number(bf.seed1, label="seed 1", interactive=True)
-                        seed2 = gr.Number(bf.seed2, label="seed 2", interactive=True)
-                        b_newseed2 = gr.Button("randomize seed 2", variant='secondary')
-                        
-                with gr.Accordion("Last image crossfeeding.", open=True):
-                    with gr.Row():
-                        branch1_crossfeed_power = gr.Slider(0.0, 1.0, bf.branch1_crossfeed_power, step=0.01, label='branch1 crossfeed power', interactive=True) 
-                        branch1_crossfeed_range = gr.Slider(0.0, 1.0, bf.branch1_crossfeed_range, step=0.01, label='branch1 crossfeed range', interactive=True) 
-                        branch1_crossfeed_decay = gr.Slider(0.0, 1.0, bf.branch1_crossfeed_decay, step=0.01, label='branch1 crossfeed decay', interactive=True) 
-    
-                with gr.Accordion("Transition settings", open=True):
-                    with gr.Row():
-                        parental_crossfeed_power = gr.Slider(0.0, 1.0, bf.parental_crossfeed_power, step=0.01, label='parental crossfeed power', interactive=True) 
-                        parental_crossfeed_range = gr.Slider(0.0, 1.0, bf.parental_crossfeed_range, step=0.01, label='parental crossfeed range', interactive=True) 
-                        parental_crossfeed_power_decay = gr.Slider(0.0, 1.0, bf.parental_crossfeed_power_decay, step=0.01, label='parental crossfeed decay', interactive=True) 
-                    with gr.Row():
-                        depth_strength = gr.Slider(0.01, 0.99, bf.depth_strength, step=0.01, label='depth_strength', interactive=True) 
-                        guidance_scale_mid_damper = gr.Slider(0.01, 2.0, bf.guidance_scale_mid_damper, step=0.01, label='guidance_scale_mid_damper', interactive=True) 
+        with gr.Accordion("Advanced Settings (click to expand)", open=False):
+
+            with gr.Accordion("Diffusion settings", open=True):
+                with gr.Row():
+                    num_inference_steps = gr.Slider(5, 100, bf.num_inference_steps, step=1, label='num_inference_steps', interactive=True)
+                    guidance_scale = gr.Slider(1, 25, bf.guidance_scale, step=0.1, label='guidance_scale', interactive=True) 
+                    negative_prompt = gr.Textbox(label="negative prompt")          
             
+            with gr.Accordion("Seed control: adjust seeds for first and last images", open=True):
+                with gr.Row():
+                    b_newseed1 = gr.Button("randomize seed 1", variant='secondary')
+                    seed1 = gr.Number(bf.seed1, label="seed 1", interactive=True)
+                    seed2 = gr.Number(bf.seed2, label="seed 2", interactive=True)
+                    b_newseed2 = gr.Button("randomize seed 2", variant='secondary')
                     
-            with gr.Row():
-                b_compute1 = gr.Button('compute first image', variant='primary')
-                b_compute_transition = gr.Button('compute transition', variant='primary')
-                b_compute2 = gr.Button('compute last image', variant='primary')
-            
-            with gr.Row():
-                img1 = gr.Image(label="1/5")
-                img2 = gr.Image(label="2/5", show_progress=False)
-                img3 = gr.Image(label="3/5", show_progress=False)
-                img4 = gr.Image(label="4/5", show_progress=False)
-                img5 = gr.Image(label="5/5")
-            
-            with gr.Row():
-                vid_single = gr.Video(label="single trans")
-                vid_multi = gr.Video(label="multi trans")
+            with gr.Accordion("Last image crossfeeding.", open=True):
+                with gr.Row():
+                    branch1_crossfeed_power = gr.Slider(0.0, 1.0, bf.branch1_crossfeed_power, step=0.01, label='branch1 crossfeed power', interactive=True) 
+                    branch1_crossfeed_range = gr.Slider(0.0, 1.0, bf.branch1_crossfeed_range, step=0.01, label='branch1 crossfeed range', interactive=True) 
+                    branch1_crossfeed_decay = gr.Slider(0.0, 1.0, bf.branch1_crossfeed_decay, step=0.01, label='branch1 crossfeed decay', interactive=True) 
+
+            with gr.Accordion("Transition settings", open=True):
+                with gr.Row():
+                    parental_crossfeed_power = gr.Slider(0.0, 1.0, bf.parental_crossfeed_power, step=0.01, label='parental crossfeed power', interactive=True) 
+                    parental_crossfeed_range = gr.Slider(0.0, 1.0, bf.parental_crossfeed_range, step=0.01, label='parental crossfeed range', interactive=True) 
+                    parental_crossfeed_power_decay = gr.Slider(0.0, 1.0, bf.parental_crossfeed_power_decay, step=0.01, label='parental crossfeed decay', interactive=True) 
+                with gr.Row():
+                    depth_strength = gr.Slider(0.01, 0.99, bf.depth_strength, step=0.01, label='depth_strength', interactive=True) 
+                    guidance_scale_mid_damper = gr.Slider(0.01, 2.0, bf.guidance_scale_mid_damper, step=0.01, label='guidance_scale_mid_damper', interactive=True) 
+        
                 
-            with gr.Row():
-                # b_restart = gr.Button("RESTART EVERYTHING")
-                b_stackforward = gr.Button('append last movie segment (left) to multi movie (right)', variant='primary')
-                
+        with gr.Row():
+            b_compute1 = gr.Button('compute first image', variant='primary')
+            b_compute_transition = gr.Button('compute transition', variant='primary')
+            b_compute2 = gr.Button('compute last image', variant='primary')
+        
+        with gr.Row():
+            img1 = gr.Image(label="1/5")
+            img2 = gr.Image(label="2/5", show_progress=False)
+            img3 = gr.Image(label="3/5", show_progress=False)
+            img4 = gr.Image(label="4/5", show_progress=False)
+            img5 = gr.Image(label="5/5")
+        
+        with gr.Row():
+            vid_single = gr.Video(label="single trans")
+            vid_multi = gr.Video(label="multi trans")
             
-            # Collect all UI elemts in list to easily pass as inputs in gradio
-            dict_ui_elem = {}
-            dict_ui_elem["prompt1"] = prompt1
-            dict_ui_elem["negative_prompt"] = negative_prompt
-            dict_ui_elem["prompt2"] = prompt2
-             
-            dict_ui_elem["duration_compute"] = duration_compute
-            dict_ui_elem["duration_video"] = duration_video
-            dict_ui_elem["height"] = height
-            dict_ui_elem["width"] = width
-             
-            dict_ui_elem["depth_strength"] = depth_strength
-            dict_ui_elem["branch1_crossfeed_power"] = branch1_crossfeed_power
-            dict_ui_elem["branch1_crossfeed_range"] = branch1_crossfeed_range
-            dict_ui_elem["branch1_crossfeed_decay"] = branch1_crossfeed_decay
+        with gr.Row():
+            # b_restart = gr.Button("RESTART EVERYTHING")
+            b_stackforward = gr.Button('append last movie segment (left) to multi movie (right)', variant='primary')
             
-            dict_ui_elem["num_inference_steps"] = num_inference_steps
-            dict_ui_elem["guidance_scale"] = guidance_scale
-            dict_ui_elem["guidance_scale_mid_damper"] = guidance_scale_mid_damper
-            dict_ui_elem["seed1"] = seed1
-            dict_ui_elem["seed2"] = seed2
-            
-            dict_ui_elem["parental_crossfeed_range"] = parental_crossfeed_range
-            dict_ui_elem["parental_crossfeed_power"] = parental_crossfeed_power
-            dict_ui_elem["parental_crossfeed_power_decay"] = parental_crossfeed_power_decay
-            
-            # Convert to list, as gradio doesn't seem to accept dicts
-            list_ui_elem = []
-            list_ui_keys = []
-            for k in dict_ui_elem.keys():
-                list_ui_elem.append(dict_ui_elem[k])
-                list_ui_keys.append(k)
-            bf.list_ui_keys = list_ui_keys
-            
-            b_newseed1.click(bf.randomize_seed1, outputs=seed1)
-            b_newseed2.click(bf.randomize_seed2, outputs=seed2)
-            b_compute1.click(bf.compute_img1, inputs=list_ui_elem, outputs=[img1, img2, img3, img4, img5])
-            b_compute2.click(bf.compute_img2, inputs=list_ui_elem, outputs=[img2, img3, img4, img5])
-            b_compute_transition.click(bf.compute_transition, 
-                                        inputs=list_ui_elem,
-                                        outputs=[img2, img3, img4, vid_single])
-            
-            b_stackforward.click(bf.stack_forward, 
-                          inputs=[prompt2, seed2], 
-                          outputs=[vid_multi, img1, img2, img3, img4, img5, prompt1, seed1, prompt2])
+        
+        # Collect all UI elemts in list to easily pass as inputs in gradio
+        dict_ui_elem = {}
+        dict_ui_elem["prompt1"] = prompt1
+        dict_ui_elem["negative_prompt"] = negative_prompt
+        dict_ui_elem["prompt2"] = prompt2
+         
+        dict_ui_elem["duration_compute"] = duration_compute
+        dict_ui_elem["duration_video"] = duration_video
+        dict_ui_elem["height"] = height
+        dict_ui_elem["width"] = width
+         
+        dict_ui_elem["depth_strength"] = depth_strength
+        dict_ui_elem["branch1_crossfeed_power"] = branch1_crossfeed_power
+        dict_ui_elem["branch1_crossfeed_range"] = branch1_crossfeed_range
+        dict_ui_elem["branch1_crossfeed_decay"] = branch1_crossfeed_decay
+        
+        dict_ui_elem["num_inference_steps"] = num_inference_steps
+        dict_ui_elem["guidance_scale"] = guidance_scale
+        dict_ui_elem["guidance_scale_mid_damper"] = guidance_scale_mid_damper
+        dict_ui_elem["seed1"] = seed1
+        dict_ui_elem["seed2"] = seed2
+        
+        dict_ui_elem["parental_crossfeed_range"] = parental_crossfeed_range
+        dict_ui_elem["parental_crossfeed_power"] = parental_crossfeed_power
+        dict_ui_elem["parental_crossfeed_power_decay"] = parental_crossfeed_power_decay
+        
+        # Convert to list, as gradio doesn't seem to accept dicts
+        list_ui_elem = []
+        list_ui_keys = []
+        for k in dict_ui_elem.keys():
+            list_ui_elem.append(dict_ui_elem[k])
+            list_ui_keys.append(k)
+        bf.list_ui_keys = list_ui_keys
+        
+        b_newseed1.click(bf.randomize_seed1, outputs=seed1)
+        b_newseed2.click(bf.randomize_seed2, outputs=seed2)
+        b_compute1.click(bf.compute_img1, inputs=list_ui_elem, outputs=[img1, img2, img3, img4, img5])
+        b_compute2.click(bf.compute_img2, inputs=list_ui_elem, outputs=[img2, img3, img4, img5])
+        b_compute_transition.click(bf.compute_transition, 
+                                    inputs=list_ui_elem,
+                                    outputs=[img2, img3, img4, vid_single])
+        
+        b_stackforward.click(bf.stack_forward, 
+                      inputs=[prompt2, seed2], 
+                      outputs=[vid_multi, img1, img2, img3, img4, img5, prompt1, seed1, prompt2])
 
             
     demo.launch(share=bf.share, inbrowser=True, inline=False)
