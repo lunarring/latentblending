@@ -13,39 +13,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os, sys
 import torch
 torch.backends.cudnn.benchmark = False
-import numpy as np
+torch.set_grad_enabled(False)
 import warnings
 warnings.filterwarnings('ignore')
 import warnings
-import torch
-from tqdm.auto import tqdm
-from PIL import Image
-# import matplotlib.pyplot as plt
-import torch
-from movie_util import MovieSaver
-from typing import Callable, List, Optional, Union
-from latent_blending import LatentBlending, add_frames_linear_interp
+from latent_blending import LatentBlending
 from stable_diffusion_holder import StableDiffusionHolder
-torch.set_grad_enabled(False)
+from huggingface_hub import hf_hub_download
 
 
-#%% First let us spawn a stable diffusion holder
-fp_ckpt = "../stable_diffusion_models/ckpt/v2-1_768-ema-pruned.ckpt"
+# %% First let us spawn a stable diffusion holder. Uncomment your version of choice.
+# fp_ckpt = hf_hub_download(repo_id="stabilityai/stable-diffusion-2-1-base", filename="v2-1_512-ema-pruned.ckpt")
+fp_ckpt = hf_hub_download(repo_id="stabilityai/stable-diffusion-2-1", filename="v2-1_768-ema-pruned.ckpt")
 sdh = StableDiffusionHolder(fp_ckpt)
-    
-#%% Next let's set up all parameters
-depth_strength = 0.65 # Specifies how deep (in terms of diffusion iterations the first branching happens)
-t_compute_max_allowed = 15 # Determines the quality of the transition in terms of compute time you grant it
+# %% Next let's set up all parameters
+depth_strength = 0.65  # Specifies how deep (in terms of diffusion iterations the first branching happens)
+t_compute_max_allowed = 15  # Determines the quality of the transition in terms of compute time you grant it
 fixed_seeds = [69731932, 504430820]
-    
+
 prompt1 = "photo of a beautiful cherry forest covered in white flowers, ambient light, very detailed, magic"
 prompt2 = "photo of an golden statue with a funny hat, surrounded by ferns and vines, grainy analog photograph, mystical ambience, incredible detail"
 
 fp_movie = 'movie_example1.mp4'
-duration_transition = 12 # In seconds
+duration_transition = 12  # In seconds
 
 # Spawn latent blending
 lb = LatentBlending(sdh)
@@ -54,10 +46,9 @@ lb.set_prompt2(prompt2)
 
 # Run latent blending
 lb.run_transition(
-    depth_strength = depth_strength,
-    t_compute_max_allowed = t_compute_max_allowed,
-    fixed_seeds = fixed_seeds
-    )
+    depth_strength=depth_strength,
+    t_compute_max_allowed=t_compute_max_allowed,
+    fixed_seeds=fixed_seeds)
 
 # Save movie
 lb.write_movie_transition(fp_movie, duration_transition)

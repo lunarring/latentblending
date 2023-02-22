@@ -13,25 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os, sys
+import os
 import torch
 torch.backends.cudnn.benchmark = False
-import numpy as np
+torch.set_grad_enabled(False)
 import warnings
 warnings.filterwarnings('ignore')
 import warnings
-import torch
-from tqdm.auto import tqdm
-from PIL import Image
-# import matplotlib.pyplot as plt
-import torch
-from movie_util import MovieSaver, concatenate_movies
-from typing import Callable, List, Optional, Union
-from latent_blending import LatentBlending, add_frames_linear_interp
+from latent_blending import LatentBlending
 from stable_diffusion_holder import StableDiffusionHolder
-torch.set_grad_enabled(False)
+from movie_util import concatenate_movies
+from huggingface_hub import hf_hub_download
 
-#%% Define vars for low-resoltion pass
+# %% Define vars for low-resoltion pass
 list_prompts = []
 list_prompts.append("surrealistic statue made of glitter and dirt, standing in a lake, atmospheric light, strange glow")
 list_prompts.append("statue of a mix between a tree and human, made of marble, incredibly detailed")
@@ -50,61 +44,59 @@ num_inference_steps_lores = 40
 nmb_max_branches_lores = 10
 depth_strength_lores = 0.5
 
-fp_ckpt_lores = "../stable_diffusion_models/ckpt/v2-1_512-ema-pruned.ckpt" 
+fp_ckpt_lores = hf_hub_download(repo_id="stabilityai/stable-diffusion-2-1-base", filename="v2-1_512-ema-pruned.ckpt")
 
-#%% Define vars for high-resoltion pass
-fp_ckpt_hires = "../stable_diffusion_models/ckpt/x4-upscaler-ema.ckpt"
+# %% Define vars for high-resoltion pass
+fp_ckpt_hires = hf_hub_download(repo_id="stabilityai/stable-diffusion-x4-upscaler", filename="x4-upscaler-ema.ckpt")
 depth_strength_hires = 0.65
 num_inference_steps_hires = 100
 nmb_branches_final_hires = 6
-#%% Run low-res pass
+
+# %% Run low-res pass
 sdh = StableDiffusionHolder(fp_ckpt_lores)
-t_compute_max_allowed = 12 # per segment
+t_compute_max_allowed = 12  # Per segment
 lb = LatentBlending(sdh)
 
-list_movie_dirs = [] #
-for i in range(len(list_prompts)-1):
+list_movie_dirs = []
+for i in range(len(list_prompts) - 1):
     # For a multi transition we can save some computation time and recycle the latents
-    if i==0:
+    if i == 0:
         lb.set_prompt1(list_prompts[i])
-        lb.set_prompt2(list_prompts[i+1])
+        lb.set_prompt2(list_prompts[i + 1])
         recycle_img1 = False
     else:
         lb.swap_forward()
-        lb.set_prompt2(list_prompts[i+1])
-        recycle_img1 = True   
-        
+        lb.set_prompt2(list_prompts[i + 1])
+        recycle_img1 = True
+
     dp_movie_part = f"tmp_part_{str(i).zfill(3)}"
     fp_movie_part = os.path.join(dp_movie_part, "movie_lowres.mp4")
     os.makedirs(dp_movie_part, exist_ok=True)
-    fixed_seeds = list_seeds[i:i+2]
-    
+    fixed_seeds = list_seeds[i:i + 2]
+
     # Run latent blending
     lb.run_transition(
-        depth_strength = depth_strength_lores,
-        nmb_max_branches = nmb_max_branches_lores,
-        fixed_seeds = fixed_seeds
-        )
-    
+        depth_strength=depth_strength_lores,
+        nmb_max_branches=nmb_max_branches_lores,
+        fixed_seeds=fixed_seeds)
+
     # Save movie and images (needed for upscaling!)
     lb.write_movie_transition(fp_movie_part, duration_single_trans)
     lb.write_imgs_transition(dp_movie_part)
     list_movie_dirs.append(dp_movie_part)
 
-
-    
-#%% Run high-res pass on each segment
+# %% Run high-res pass on each segment
 sdh = StableDiffusionHolder(fp_ckpt_hires)
-lb = LatentBlending(sdh) 
+lb = LatentBlending(sdh)
 for dp_part in list_movie_dirs:
     lb.run_upscaling(dp_part, depth_strength_hires, num_inference_steps_hires, nmb_branches_final_hires)
 
-#%% concatenate into one long movie
+# %% concatenate into one long movie
 list_fp_movies = []
 for dp_part in list_movie_dirs:
     fp_movie = os.path.join(dp_part, "movie_highres.mp4")
     assert os.path.isfile(fp_movie)
     list_fp_movies.append(fp_movie)
-    
+
 fp_final = "example4.mp4"
 concatenate_movies(fp_final, list_fp_movies)

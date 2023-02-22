@@ -13,25 +13,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os, sys
 import torch
 torch.backends.cudnn.benchmark = False
-import numpy as np
+torch.set_grad_enabled(False)
 import warnings
 warnings.filterwarnings('ignore')
 import warnings
-import torch
-from tqdm.auto import tqdm
-from PIL import Image
-# import matplotlib.pyplot as plt
-import torch
-from movie_util import MovieSaver
-from typing import Callable, List, Optional, Union
-from latent_blending import LatentBlending, add_frames_linear_interp
+from latent_blending import LatentBlending
 from stable_diffusion_holder import StableDiffusionHolder
-torch.set_grad_enabled(False)
+from huggingface_hub import hf_hub_download
 
-#%% Define vars for low-resoltion pass
+# %% Define vars for low-resoltion pass
 prompt1 = "photo of mount vesuvius erupting a terrifying pyroclastic ash cloud"
 prompt2 = "photo of a inside a building full of ash, fire, death, destruction, explosions"
 fixed_seeds = [5054613, 1168652]
@@ -41,21 +33,18 @@ height = 384
 num_inference_steps_lores = 40
 nmb_max_branches_lores = 10
 depth_strength_lores = 0.5
+fp_ckpt_lores = hf_hub_download(repo_id="stabilityai/stable-diffusion-2-1-base", filename="v2-1_512-ema-pruned.ckpt")
 
-fp_ckpt_lores = "../stable_diffusion_models/ckpt/v2-1_512-ema-pruned.ckpt" 
-
-#%% Define vars for high-resoltion pass
-fp_ckpt_hires = "../stable_diffusion_models/ckpt/x4-upscaler-ema.ckpt"
+# %% Define vars for high-resoltion pass
+fp_ckpt_hires = hf_hub_download(repo_id="stabilityai/stable-diffusion-x4-upscaler", filename="x4-upscaler-ema.ckpt")
 depth_strength_hires = 0.65
 num_inference_steps_hires = 100
 nmb_branches_final_hires = 6
-dp_imgs = "tmp_transition" # folder for results and intermediate steps
+dp_imgs = "tmp_transition"  # Folder for results and intermediate steps
 
 
-#%% Run low-res pass
+# %% Run low-res pass
 sdh = StableDiffusionHolder(fp_ckpt_lores)
-
-#%%
 lb = LatentBlending(sdh)
 lb.set_prompt1(prompt1)
 lb.set_prompt2(prompt2)
@@ -64,14 +53,13 @@ lb.set_height(height)
 
 # Run latent blending
 lb.run_transition(
-    depth_strength = depth_strength_lores,
-    nmb_max_branches = nmb_max_branches_lores,
-    fixed_seeds = fixed_seeds
-    )
+    depth_strength=depth_strength_lores,
+    nmb_max_branches=nmb_max_branches_lores,
+    fixed_seeds=fixed_seeds)
 
 lb.write_imgs_transition(dp_imgs)
 
-#%% Run high-res pass
+# %% Run high-res pass
 sdh = StableDiffusionHolder(fp_ckpt_hires)
-lb = LatentBlending(sdh) 
+lb = LatentBlending(sdh)
 lb.run_upscaling(dp_imgs, depth_strength_hires, num_inference_steps_hires, nmb_branches_final_hires)
