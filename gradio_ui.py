@@ -358,7 +358,7 @@ if __name__ == "__main__":
             prompt2 = gr.Textbox(label="prompt 2")
 
         with gr.Row():
-            duration_compute = gr.Slider(5, 200, bf.t_compute_max_allowed, step=1, label='compute budget', interactive=True)
+            duration_compute = gr.Slider(5, 200, bf.t_compute_max_allowed, step=1, label='waiting time', interactive=True)
             duration_video = gr.Slider(1, 100, bf.duration_video, step=0.1, label='video duration', interactive=True)
             height = gr.Slider(256, 2048, bf.height, step=128, label='height', interactive=True)
             width = gr.Slider(256, 2048, bf.width, step=128, label='width', interactive=True)
