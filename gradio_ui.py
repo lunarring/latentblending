@@ -353,12 +353,19 @@ if __name__ == "__main__":
     # self = BlendingFrontend(None)
 
     with gr.Blocks() as demo:
+        gr.HTML("""
+<p>For faster inference without waiting in queue, you may duplicate the space and upgrade to GPU in settings.
+<br/>
+<a href="https://huggingface.co/spaces/Adapter/T2I-Adapter?duplicate=true">
+<img style="margin-top: 0em; margin-bottom: 0em" src="https://bit.ly/3gLdBN6" alt="Duplicate Space"></a>
+<p/>""")
+
         with gr.Row():
             prompt1 = gr.Textbox(label="prompt 1")
             prompt2 = gr.Textbox(label="prompt 2")
 
         with gr.Row():
-            duration_compute = gr.Slider(5, 200, bf.t_compute_max_allowed, step=1, label='waiting time', interactive=True)
+            duration_compute = gr.Slider(10, 25, bf.t_compute_max_allowed, step=1, label='waiting time', interactive=True)
             duration_video = gr.Slider(1, 100, bf.duration_video, step=0.1, label='video duration', interactive=True)
             height = gr.Slider(256, 2048, bf.height, step=128, label='height', interactive=True)
             width = gr.Slider(256, 2048, bf.width, step=128, label='width', interactive=True)
@@ -394,9 +401,9 @@ if __name__ == "__main__":
                     guidance_scale_mid_damper = gr.Slider(0.01, 2.0, bf.guidance_scale_mid_damper, step=0.01, label='guidance_scale_mid_damper', interactive=True)
 
         with gr.Row():
-            b_compute1 = gr.Button('compute first image', variant='primary')
-            b_compute_transition = gr.Button('compute transition', variant='primary')
-            b_compute2 = gr.Button('compute last image', variant='primary')
+            b_compute1 = gr.Button('step1: compute first image', variant='primary')
+            b_compute2 = gr.Button('step2: compute last image', variant='primary')
+            b_compute_transition = gr.Button('step3: compute transition', variant='primary')
 
         with gr.Row():
             img1 = gr.Image(label="1/5")
