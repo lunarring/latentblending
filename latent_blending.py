@@ -14,9 +14,6 @@
 # limitations under the License.
 
 import os, sys
-dp_git = "/home/lugo/git/"
-sys.path.append('util')
-# sys.path.append('../stablediffusion/ldm')
 import torch
 torch.backends.cudnn.benchmark = False
 import numpy as np
@@ -25,19 +22,15 @@ warnings.filterwarnings('ignore')
 import time
 import subprocess
 import warnings
-import torch
 from tqdm.auto import tqdm
 from PIL import Image
 # import matplotlib.pyplot as plt
-import torch
 from movie_util import MovieSaver
 import datetime
 from typing import Callable, List, Optional, Union
 import inspect
 from threading import Thread
 torch.set_grad_enabled(False)
-from omegaconf import OmegaConf
-from torch import autocast
 from contextlib import nullcontext
 
 from ldm.models.diffusion.ddim import DDIMSampler
