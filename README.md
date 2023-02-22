@@ -5,7 +5,7 @@ Latent blending enables video transitions with incredible smoothness between pro
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1I77--5PS6C-sAskl9OggS1zR0HLKdq1M?usp=sharing)
 
 ```python
-fp_ckpt = 'path_to_SD2.ckpt'
+fp_ckpt = hf_hub_download(repo_id="stabilityai/stable-diffusion-2-1-base", filename="v2-1_512-ema-pruned.ckpt")
 
 sdh = StableDiffusionHolder(fp_ckpt)
 lb = LatentBlending(sdh)
@@ -86,10 +86,6 @@ lb.set_parental_crossfeed(crossfeed_power, crossfeed_range, crossfeed_decay)
 ```commandline
 pip install -r requirements.txt
 ```
-#### Download Models from Huggingface
-[Download the Stable Diffusion v2-1_768 Model](https://huggingface.co/stabilityai/stable-diffusion-2-1)
-
-[Download the Stable Diffusion x4 Upscaler](https://huggingface.co/stabilityai/stable-diffusion-x4-upscaler)
 
 #### (Optional but recommended) Install [Xformers](https://github.com/facebookresearch/xformers)
 With xformers, stable diffusion will run faster with smaller memory inprint. Necessary for higher resolutions / upscaling model.
