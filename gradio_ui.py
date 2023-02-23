@@ -353,12 +353,13 @@ if __name__ == "__main__":
     # self = BlendingFrontend(None)
 
     with gr.Blocks() as demo:
-        gr.HTML("""
+        gr.HTML("""<h1>Latent Blending</h1>
+<p>Create butter-smooth transitions between prompts, powered by stable diffusion</p>
 <p>For faster inference without waiting in queue, you may duplicate the space and upgrade to GPU in settings.
 <br/>
-<a href="https://huggingface.co/spaces/Adapter/T2I-Adapter?duplicate=true">
+<a href="https://huggingface.co/spaces/lunarring/latentblending?duplicate=true">
 <img style="margin-top: 0em; margin-bottom: 0em" src="https://bit.ly/3gLdBN6" alt="Duplicate Space"></a>
-<p/>""")
+</p>""")
 
         with gr.Row():
             prompt1 = gr.Textbox(label="prompt 1")
