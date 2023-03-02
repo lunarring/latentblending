@@ -76,6 +76,7 @@ for i in range(len(list_prompts) - 1):
 
     # Run latent blending
     lb.run_transition(
+        recycle_img1=recycle_img1,
         depth_strength=depth_strength_lores,
         nmb_max_branches=nmb_max_branches_lores,
         fixed_seeds=fixed_seeds)

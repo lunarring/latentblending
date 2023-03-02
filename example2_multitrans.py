@@ -25,8 +25,8 @@ from movie_util import concatenate_movies
 from huggingface_hub import hf_hub_download
 
 # %% First let us spawn a stable diffusion holder. Uncomment your version of choice.
-# fp_ckpt = hf_hub_download(repo_id="stabilityai/stable-diffusion-2-1-base", filename="v2-1_512-ema-pruned.ckpt")
-fp_ckpt = hf_hub_download(repo_id="stabilityai/stable-diffusion-2-1", filename="v2-1_768-ema-pruned.ckpt")
+fp_ckpt = hf_hub_download(repo_id="stabilityai/stable-diffusion-2-1-base", filename="v2-1_512-ema-pruned.ckpt")
+# fp_ckpt = hf_hub_download(repo_id="stabilityai/stable-diffusion-2-1", filename="v2-1_768-ema-pruned.ckpt")
 sdh = StableDiffusionHolder(fp_ckpt)
 
 # %% Let's setup the multi transition
@@ -39,9 +39,9 @@ list_prompts = []
 list_prompts.append("surrealistic statue made of glitter and dirt, standing in a lake, atmospheric light, strange glow")
 list_prompts.append("statue of a mix between a tree and human, made of marble, incredibly detailed")
 list_prompts.append("weird statue of a frog monkey, many colors, standing next to the ruins of an ancient city")
-list_prompts.append("statue of a spider that looked like a human")
-list_prompts.append("statue of a bird that looked like a scorpion")
-list_prompts.append("statue of an ancient cybernetic messenger annoucing good news, golden, futuristic")
+# list_prompts.append("statue of a spider that looked like a human")
+# list_prompts.append("statue of a bird that looked like a scorpion")
+# list_prompts.append("statue of an ancient cybernetic messenger annoucing good news, golden, futuristic")
 
 # You can optionally specify the seeds
 list_seeds = [954375479, 332539350, 956051013, 408831845, 250009012, 675588737]
@@ -65,6 +65,7 @@ for i in range(len(list_prompts) - 1):
     fixed_seeds = list_seeds[i:i + 2]
     # Run latent blending
     lb.run_transition(
+        recycle_img1 = recycle_img1,
         depth_strength=depth_strength,
         t_compute_max_allowed=t_compute_max_allowed,
         fixed_seeds=fixed_seeds)
