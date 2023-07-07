@@ -186,6 +186,81 @@ def concatenate_movies(fp_final: str, list_fp_movies: List[str]):
     os.remove(fp_list)
     if os.path.isfile(fp_final):
         print(f"concatenate_movies: success! Watch here: {fp_final}")
+        
+    
+def add_sound(fp_final, fp_silentmovie, fp_sound):
+    cmd = f'ffmpeg -i {fp_silentmovie} -i {fp_sound} -c copy -map 0:v:0 -map 1:a:0 {fp_final}'
+    subprocess.call(cmd, shell=True)
+    if os.path.isfile(fp_final):
+        print(f"add_sound: success! Watch here: {fp_final}")
+    
+    
+def add_subtitles_to_video(
+        fp_input: str,
+        fp_output: str,
+        subtitles: list,
+        fontsize: int = 50,
+        font_name: str = "Arial",
+        color: str = 'yellow'
+    ):
+    from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
+    r"""
+    Function to add subtitles to a video.
+    
+    Args:
+        fp_input (str): File path of the input video.
+        fp_output (str): File path of the output video with subtitles.
+        subtitles (list): List of dictionaries containing subtitle information 
+            (start, duration, text). Example:
+            subtitles = [
+                {"start": 1, "duration": 3, "text": "hello test"},
+                {"start": 4, "duration": 2, "text": "this works"},
+            ]
+        fontsize (int): Font size of the subtitles.
+        font_name (str): Font name of the subtitles.
+        color (str): Color of the subtitles.
+    """
+    
+    # Check if the input file exists
+    if not os.path.isfile(fp_input):
+        raise FileNotFoundError(f"Input file not found: {fp_input}")
+    
+    # Check the subtitles format and sort them by the start time
+    time_points = []
+    for subtitle in subtitles:
+        if not isinstance(subtitle, dict):
+            raise ValueError("Each subtitle must be a dictionary containing 'start', 'duration' and 'text'.")
+        if not all(key in subtitle for key in ["start", "duration", "text"]):
+            raise ValueError("Each subtitle dictionary must contain 'start', 'duration' and 'text'.")
+        if subtitle['start'] < 0 or subtitle['duration'] <= 0:
+            raise ValueError("'start' should be non-negative and 'duration' should be positive.")
+        time_points.append((subtitle['start'], subtitle['start'] + subtitle['duration']))
+
+    # Check for overlaps
+    time_points.sort()
+    for i in range(1, len(time_points)):
+        if time_points[i][0] < time_points[i - 1][1]:
+            raise ValueError("Subtitle time intervals should not overlap.")
+    
+    # Load the video clip
+    video = VideoFileClip(fp_input)
+    
+    # Create a list to store subtitle clips
+    subtitle_clips = []
+    
+    # Loop through the subtitle information and create TextClip for each
+    for subtitle in subtitles:
+        text_clip = TextClip(subtitle["text"], fontsize=fontsize, color=color, font=font_name)
+        text_clip = text_clip.set_position(('center', 'bottom')).set_start(subtitle["start"]).set_duration(subtitle["duration"])
+        subtitle_clips.append(text_clip)
+    
+    # Overlay the subtitles on the video
+    video = CompositeVideoClip([video] + subtitle_clips)
+    
+    # Write the final clip to a new file
+    video.write_videofile(fp_output)
+
+
 
 
 class MovieReader():
