@@ -29,7 +29,7 @@ from stable_diffusion_holder import StableDiffusionHolder
 import gradio as gr
 from dotenv import find_dotenv, load_dotenv
 import shutil
-import random
+import uuid
 from utils import get_time, add_frames_linear_interp
 from huggingface_hub import hf_hub_download
 
@@ -163,7 +163,7 @@ class BlendingFrontend():
             self.user_id = list_ui_vals[list_ui_keys.index('user_id')]
         else:
             # generate new user id
-            self.user_id = ''.join((random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ') for i in range(8)))
+            self.user_id = uuid.uuid4().hex
             print(f"made new user_id: {self.user_id} at {get_time('second')}")
 
     def save_latents(self, fp_latents, list_latents):
@@ -347,8 +347,8 @@ class BlendingFrontend():
 
 
 if __name__ == "__main__":
-    fp_ckpt = hf_hub_download(repo_id="stabilityai/stable-diffusion-2-1-base", filename="v2-1_512-ema-pruned.ckpt")
-    # fp_ckpt = hf_hub_download(repo_id="stabilityai/stable-diffusion-2-1", filename="v2-1_768-ema-pruned.ckpt")
+#    fp_ckpt = hf_hub_download(repo_id="stabilityai/stable-diffusion-2-1-base", filename="v2-1_512-ema-pruned.ckpt")
+    fp_ckpt = hf_hub_download(repo_id="stabilityai/stable-diffusion-2-1", filename="v2-1_768-ema-pruned.ckpt")
     bf = BlendingFrontend(StableDiffusionHolder(fp_ckpt))
     # self = BlendingFrontend(None)
 
@@ -368,8 +368,8 @@ if __name__ == "__main__":
         with gr.Row():
             duration_compute = gr.Slider(10, 25, bf.t_compute_max_allowed, step=1, label='waiting time', interactive=True)
             duration_video = gr.Slider(1, 100, bf.duration_video, step=0.1, label='video duration', interactive=True)
-            height = gr.Slider(256, 2048, bf.height, step=128, label='height', interactive=True)
-            width = gr.Slider(256, 2048, bf.width, step=128, label='width', interactive=True)
+            height = gr.Slider(256, 1024, bf.height, step=128, label='height', interactive=True)
+            width = gr.Slider(256, 1024, bf.width, step=128, label='width', interactive=True)
 
         with gr.Accordion("Advanced Settings (click to expand)", open=False):
 
@@ -425,7 +425,7 @@ if __name__ == "__main__":
                 """
                 # Parameters
                 ## Main
-                - compute budget: set your waiting time for the transition. high values = better quality
+                - waiting time: set your waiting time for the transition. high values = better quality
                 - video duration: seconds per segment
                 - height/width: in pixels
 
