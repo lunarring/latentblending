@@ -155,6 +155,24 @@ class StableDiffusionHolder:
         else:
             self.height = 512
             self.width = 512
+            
+    def get_noise(self, seed, mode='standard'):
+        r"""
+        Helper function to get noise given seed.
+        Args:
+            seed: int
+        """
+        
+        generator = torch.Generator(device=self.device).manual_seed(int(seed))
+        if mode == 'standard':
+            shape_latents = [self.C, self.height // self.f, self.width // self.f]
+            C, H, W = shape_latents
+        elif mode == 'upscale':
+            w = self.image1_lowres.size[0]
+            h = self.image1_lowres.size[1]
+            shape_latents = [self.model.channels, h, w]
+            C, H, W = shape_latents
+        return torch.randn((1, C, H, W), generator=generator, device=self.device)
 
     def set_negative_prompt(self, negative_prompt):
         r"""Set the negative prompt. Currenty only one negative prompt is supported

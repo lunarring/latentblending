@@ -26,7 +26,6 @@ from tqdm.auto import tqdm
 from PIL import Image
 from movie_util import MovieSaver
 from typing import List, Optional
-from ldm.models.diffusion.ddpm import LatentUpscaleDiffusion, LatentInpaintDiffusion
 import lpips
 from utils import interpolate_spherical, interpolate_linear, add_frames_linear_interp, yml_load, yml_save
 
@@ -34,7 +33,7 @@ from utils import interpolate_spherical, interpolate_linear, add_frames_linear_i
 class LatentBlending():
     def __init__(
             self,
-            sdh: None,
+            dh: None,
             guidance_scale: float = 4,
             guidance_scale_mid_damper: float = 0.5,
             mid_compression_scaler: float = 1.2):
@@ -59,10 +58,10 @@ class LatentBlending():
             and guidance_scale_mid_damper <= 1.0, \
             f"guidance_scale_mid_damper neees to be in interval (0,1], you provided {guidance_scale_mid_damper}"
 
-        self.sdh = sdh
-        self.device = self.sdh.device
-        self.width = self.sdh.width
-        self.height = self.sdh.height
+        self.dh = dh
+        self.device = self.dh.device
+        self.set_dimensions()
+
         self.guidance_scale_mid_damper = guidance_scale_mid_damper
         self.mid_compression_scaler = mid_compression_scaler
         self.seed1 = 0
@@ -86,40 +85,49 @@ class LatentBlending():
         self.image1_lowres = None
         self.image2_lowres = None
         self.negative_prompt = None
-        self.num_inference_steps = self.sdh.num_inference_steps
+        self.num_inference_steps = self.dh.num_inference_steps
         self.noise_level_upscaling = 20
         self.list_injection_idx = None
         self.list_nmb_branches = None
 
         # Mixing parameters
-        self.branch1_crossfeed_power = 0.1
-        self.branch1_crossfeed_range = 0.6
-        self.branch1_crossfeed_decay = 0.8
+        self.branch1_crossfeed_power = 0.05
+        self.branch1_crossfeed_range = 0.4
+        self.branch1_crossfeed_decay = 0.9
 
         self.parental_crossfeed_power = 0.1
         self.parental_crossfeed_range = 0.8
         self.parental_crossfeed_power_decay = 0.8
 
         self.set_guidance_scale(guidance_scale)
-        self.init_mode()
+        self.mode = 'standard'
+        # self.init_mode()
         self.multi_transition_img_first = None
         self.multi_transition_img_last = None
         self.dt_per_diff = 0
         self.spatial_mask = None
         self.lpips = lpips.LPIPS(net='alex').cuda(self.device)
+        
+        self.set_prompt1("")
+        self.set_prompt2("")
 
-    def init_mode(self):
-        r"""
-        Sets the operational mode. Currently supported are standard, inpainting and x4 upscaling.
-        """
-        if isinstance(self.sdh.model, LatentUpscaleDiffusion):
-            self.mode = 'upscale'
-        elif isinstance(self.sdh.model, LatentInpaintDiffusion):
-            self.sdh.image_source = None
-            self.sdh.mask_image = None
-            self.mode = 'inpaint'
-        else:
-            self.mode = 'standard'
+    # def init_mode(self):
+    #     r"""
+    #     Sets the operational mode. Currently supported are standard, inpainting and x4 upscaling.
+    #     """
+    #     if isinstance(self.dh.model, LatentUpscaleDiffusion):
+    #         self.mode = 'upscale'
+    #     elif isinstance(self.dh.model, LatentInpaintDiffusion):
+    #         self.dh.image_source = None
+    #         self.dh.mask_image = None
+    #         self.mode = 'inpaint'
+    #     else:
+    #         self.mode = 'standard'
+    
+    def set_dimensions(self, width=None, height=None):
+        self.dh.set_dimensions(width, height)
+
+        
 
     def set_guidance_scale(self, guidance_scale):
         r"""
@@ -127,13 +135,13 @@ class LatentBlending():
         """
         self.guidance_scale_base = guidance_scale
         self.guidance_scale = guidance_scale
-        self.sdh.guidance_scale = guidance_scale
+        self.dh.guidance_scale = guidance_scale
 
     def set_negative_prompt(self, negative_prompt):
         r"""Set the negative prompt. Currenty only one negative prompt is supported
         """
         self.negative_prompt = negative_prompt
-        self.sdh.set_negative_prompt(negative_prompt)
+        self.dh.set_negative_prompt(negative_prompt)
 
     def set_guidance_mid_dampening(self, fract_mixing):
         r"""
@@ -144,7 +152,7 @@ class LatentBlending():
         max_guidance_reduction = self.guidance_scale_base * (1 - self.guidance_scale_mid_damper) - 1
         guidance_scale_effective = self.guidance_scale_base - max_guidance_reduction * mid_factor
         self.guidance_scale = guidance_scale_effective
-        self.sdh.guidance_scale = guidance_scale_effective
+        self.dh.guidance_scale = guidance_scale_effective
 
     def set_branch1_crossfeed(self, crossfeed_power, crossfeed_range, crossfeed_decay):
         r"""
@@ -265,7 +273,7 @@ class LatentBlending():
 
         # Ensure correct num_inference_steps in holder
         self.num_inference_steps = num_inference_steps
-        self.sdh.num_inference_steps = num_inference_steps
+        self.dh.set_num_inference_steps(num_inference_steps)
 
         # Compute / Recycle first image
         if not recycle_img1 or len(self.tree_latents[0]) != self.num_inference_steps:
@@ -282,7 +290,7 @@ class LatentBlending():
         # Reset the tree, injecting the edge latents1/2 we just generated/recycled
         self.tree_latents = [list_latents1, list_latents2]
         self.tree_fracts = [0.0, 1.0]
-        self.tree_final_imgs = [self.sdh.latent2image((self.tree_latents[0][-1])), self.sdh.latent2image((self.tree_latents[-1][-1]))]
+        self.tree_final_imgs = [self.dh.latent2image((self.tree_latents[0][-1])), self.dh.latent2image((self.tree_latents[-1][-1]))]
         self.tree_idx_injection = [0, 0]
 
         # Hard-fix. Apply spatial mask only for list_latents2 but not for transition. WIP...
@@ -325,7 +333,7 @@ class LatentBlending():
         self.dt_per_diff = (t1 - t0) / self.num_inference_steps
         self.tree_latents[0] = list_latents1
         if return_image:
-            return self.sdh.latent2image(list_latents1[-1])
+            return self.dh.latent2image(list_latents1[-1])
         else:
             return list_latents1
 
@@ -357,7 +365,7 @@ class LatentBlending():
         self.tree_latents[-1] = list_latents2
 
         if return_image:
-            return self.sdh.latent2image(list_latents2[-1])
+            return self.dh.latent2image(list_latents2[-1])
         else:
             return list_latents2
 
@@ -511,38 +519,9 @@ class LatentBlending():
         """
         b_parent1, b_parent2 = self.get_closest_idx(fract_mixing)
         self.tree_latents.insert(b_parent1 + 1, list_latents)
-        self.tree_final_imgs.insert(b_parent1 + 1, self.sdh.latent2image(list_latents[-1]))
+        self.tree_final_imgs.insert(b_parent1 + 1, self.dh.latent2image(list_latents[-1]))
         self.tree_fracts.insert(b_parent1 + 1, fract_mixing)
         self.tree_idx_injection.insert(b_parent1 + 1, idx_injection)
-
-    def get_spatial_mask_template(self):
-        r"""
-        Experimental helper function to get a spatial mask template.
-        """
-        shape_latents = [self.sdh.C, self.sdh.height // self.sdh.f, self.sdh.width // self.sdh.f]
-        C, H, W = shape_latents
-        return np.ones((H, W))
-
-    def set_spatial_mask(self, img_mask):
-        r"""
-        Experimental helper function to set a spatial mask.
-        The mask forces latents to be overwritten.
-        Args:
-            img_mask:
-                mask image [0,1]. You can get a template using get_spatial_mask_template
-        """
-        shape_latents = [self.sdh.C, self.sdh.height // self.sdh.f, self.sdh.width // self.sdh.f]
-        C, H, W = shape_latents
-        img_mask = np.asarray(img_mask)
-        assert len(img_mask.shape) == 2, "Currently, only 2D images are supported as mask"
-        img_mask = np.clip(img_mask, 0, 1)
-        assert img_mask.shape[0] == H, f"Your mask needs to be of dimension {H} x {W}"
-        assert img_mask.shape[1] == W, f"Your mask needs to be of dimension {H} x {W}"
-        spatial_mask = torch.from_numpy(img_mask).to(device=self.device)
-        spatial_mask = torch.unsqueeze(spatial_mask, 0)
-        spatial_mask = spatial_mask.repeat((C, 1, 1))
-        spatial_mask = torch.unsqueeze(spatial_mask, 0)
-        self.spatial_mask = spatial_mask
 
     def get_noise(self, seed):
         r"""
@@ -550,16 +529,7 @@ class LatentBlending():
         Args:
             seed: int
         """
-        generator = torch.Generator(device=self.sdh.device).manual_seed(int(seed))
-        if self.mode == 'standard':
-            shape_latents = [self.sdh.C, self.sdh.height // self.sdh.f, self.sdh.width // self.sdh.f]
-            C, H, W = shape_latents
-        elif self.mode == 'upscale':
-            w = self.image1_lowres.size[0]
-            h = self.image1_lowres.size[1]
-            shape_latents = [self.sdh.model.channels, h, w]
-            C, H, W = shape_latents
-        return torch.randn((1, C, H, W), generator=generator, device=self.sdh.device)
+        return self.dh.get_noise(seed, self.mode)
 
     @torch.no_grad()
     def run_diffusion(
@@ -590,31 +560,40 @@ class LatentBlending():
         """
 
         # Ensure correct num_inference_steps in Holder
-        self.sdh.num_inference_steps = self.num_inference_steps
+        self.dh.set_num_inference_steps(self.num_inference_steps)
         assert type(list_conditionings) is list, "list_conditionings need to be a list"
 
-        if self.mode == 'standard':
+        if self.dh.use_sd_xl:
             text_embeddings = list_conditionings[0]
-            return self.sdh.run_diffusion_standard(
+            return self.dh.run_diffusion_sd_xl(
                 text_embeddings=text_embeddings,
                 latents_start=latents_start,
                 idx_start=idx_start,
                 list_latents_mixing=list_latents_mixing,
                 mixing_coeffs=mixing_coeffs,
-                spatial_mask=self.spatial_mask,
                 return_image=return_image)
 
-        elif self.mode == 'upscale':
-            cond = list_conditionings[0]
-            uc_full = list_conditionings[1]
-            return self.sdh.run_diffusion_upscaling(
-                cond,
-                uc_full,
+        else:
+            text_embeddings = list_conditionings[0]
+            return self.dh.run_diffusion_standard(
+                text_embeddings=text_embeddings,
                 latents_start=latents_start,
                 idx_start=idx_start,
                 list_latents_mixing=list_latents_mixing,
                 mixing_coeffs=mixing_coeffs,
                 return_image=return_image)
+
+        # elif self.mode == 'upscale':
+        #     cond = list_conditionings[0]
+        #     uc_full = list_conditionings[1]
+        #     return self.dh.run_diffusion_upscaling(
+        #         cond,
+        #         uc_full,
+        #         latents_start=latents_start,
+        #         idx_start=idx_start,
+        #         list_latents_mixing=list_latents_mixing,
+        #         mixing_coeffs=mixing_coeffs,
+        #         return_image=return_image)
 
     def run_upscaling(
             self,
@@ -670,8 +649,8 @@ class LatentBlending():
             imgs_lowres.append(Image.open(fp_img_lowres))
 
         # set up upscaling
-        text_embeddingA = self.sdh.get_text_embedding(prompt1)
-        text_embeddingB = self.sdh.get_text_embedding(prompt2)
+        text_embeddingA = self.dh.get_text_embedding(prompt1)
+        text_embeddingB = self.dh.get_text_embedding(prompt2)
         list_fract_mixing = np.linspace(0, 1, nmb_max_branches_lowres - 1)
         for i in range(nmb_max_branches_lowres - 1):
             print(f"Starting movie segment {i+1}/{nmb_max_branches_lowres-1}")
@@ -701,22 +680,34 @@ class LatentBlending():
 
     @torch.no_grad()
     def get_mixed_conditioning(self, fract_mixing):
-        if self.mode == 'standard':
-            text_embeddings_mix = interpolate_linear(self.text_embedding1, self.text_embedding2, fract_mixing)
+        if self.dh.use_sd_xl:
+            text_embeddings_mix = []
+            for i in range(len(self.text_embedding1)):
+                text_embeddings_mix.append(interpolate_linear(self.text_embedding1[i], self.text_embedding2[i], fract_mixing))
             list_conditionings = [text_embeddings_mix]
-        elif self.mode == 'inpaint':
-            text_embeddings_mix = interpolate_linear(self.text_embedding1, self.text_embedding2, fract_mixing)
-            list_conditionings = [text_embeddings_mix]
-        elif self.mode == 'upscale':
-            text_embeddings_mix = interpolate_linear(self.text_embedding1, self.text_embedding2, fract_mixing)
-            cond, uc_full = self.sdh.get_cond_upscaling(self.image1_lowres, text_embeddings_mix, self.noise_level_upscaling)
-            condB, uc_fullB = self.sdh.get_cond_upscaling(self.image2_lowres, text_embeddings_mix, self.noise_level_upscaling)
-            cond['c_concat'][0] = interpolate_spherical(cond['c_concat'][0], condB['c_concat'][0], fract_mixing)
-            uc_full['c_concat'][0] = interpolate_spherical(uc_full['c_concat'][0], uc_fullB['c_concat'][0], fract_mixing)
-            list_conditionings = [cond, uc_full]
         else:
-            raise ValueError(f"mix_conditioning: unknown mode {self.mode}")
+            text_embeddings_mix = interpolate_linear(self.text_embedding1, self.text_embedding2, fract_mixing)
+            list_conditionings = [text_embeddings_mix]
         return list_conditionings
+
+    # @torch.no_grad()
+    # def get_mixed_conditioning(self, fract_mixing):
+    #     if self.mode == 'standard':
+    #         text_embeddings_mix = interpolate_linear(self.text_embedding1, self.text_embedding2, fract_mixing)
+    #         list_conditionings = [text_embeddings_mix]
+    #     elif self.mode == 'inpaint':
+    #         text_embeddings_mix = interpolate_linear(self.text_embedding1, self.text_embedding2, fract_mixing)
+    #         list_conditionings = [text_embeddings_mix]
+    #     elif self.mode == 'upscale':
+    #         text_embeddings_mix = interpolate_linear(self.text_embedding1, self.text_embedding2, fract_mixing)
+    #         cond, uc_full = self.dh.get_cond_upscaling(self.image1_lowres, text_embeddings_mix, self.noise_level_upscaling)
+    #         condB, uc_fullB = self.dh.get_cond_upscaling(self.image2_lowres, text_embeddings_mix, self.noise_level_upscaling)
+    #         cond['c_concat'][0] = interpolate_spherical(cond['c_concat'][0], condB['c_concat'][0], fract_mixing)
+    #         uc_full['c_concat'][0] = interpolate_spherical(uc_full['c_concat'][0], uc_fullB['c_concat'][0], fract_mixing)
+    #         list_conditionings = [cond, uc_full]
+    #     else:
+    #         raise ValueError(f"mix_conditioning: unknown mode {self.mode}")
+    #     return list_conditionings
 
     @torch.no_grad()
     def get_text_embeddings(
@@ -729,7 +720,7 @@ class LatentBlending():
             prompt: str
                 ABC trending on artstation painted by Old Greg.
         """
-        return self.sdh.get_text_embedding(prompt)
+        return self.dh.get_text_embedding(prompt)
 
     def write_imgs_transition(self, dp_img):
         r"""
@@ -766,7 +757,7 @@ class LatentBlending():
         # Save as MP4
         if os.path.isfile(fp_movie):
             os.remove(fp_movie)
-        ms = MovieSaver(fp_movie, fps=fps, shape_hw=[self.sdh.height, self.sdh.width])
+        ms = MovieSaver(fp_movie, fps=fps, shape_hw=[self.dh.height_img, self.dh.width_img])
         for img in tqdm(imgs_transition_ext):
             ms.write_frame(img)
         ms.finalize()
@@ -811,7 +802,7 @@ class LatentBlending():
         Set a the seed for a fresh start.
         """
         self.seed = seed
-        self.sdh.seed = seed
+        self.dh.seed = seed
 
     def set_width(self, width):
         r"""
@@ -819,7 +810,7 @@ class LatentBlending():
         """
         assert np.mod(width, 64) == 0, "set_width: value needs to be divisible by 64"
         self.width = width
-        self.sdh.width = width
+        self.dh.width = width
 
     def set_height(self, height):
         r"""
@@ -827,7 +818,7 @@ class LatentBlending():
         """
         assert np.mod(height, 64) == 0, "set_height: value needs to be divisible by 64"
         self.height = height
-        self.sdh.height = height
+        self.dh.height = height
 
     def swap_forward(self):
         r"""
