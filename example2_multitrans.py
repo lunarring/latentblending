@@ -20,34 +20,37 @@ import warnings
 warnings.filterwarnings('ignore')
 import warnings
 from latent_blending import LatentBlending
-from stable_diffusion_holder import StableDiffusionHolder
+from diffusers_holder import DiffusersHolder
+from diffusers import DiffusionPipeline
 from movie_util import concatenate_movies
 from huggingface_hub import hf_hub_download
 
 # %% First let us spawn a stable diffusion holder. Uncomment your version of choice.
-fp_ckpt = hf_hub_download(repo_id="stabilityai/stable-diffusion-2-1-base", filename="v2-1_512-ema-pruned.ckpt")
-# fp_ckpt = hf_hub_download(repo_id="stabilityai/stable-diffusion-2-1", filename="v2-1_768-ema-pruned.ckpt")
-sdh = StableDiffusionHolder(fp_ckpt)
+pretrained_model_name_or_path = "stabilityai/stable-diffusion-xl-base-1.0"
+pipe = DiffusionPipeline.from_pretrained(pretrained_model_name_or_path, torch_dtype=torch.float16)
+pipe.to('cuda:1')
+dh = DiffusersHolder(pipe)
 
 # %% Let's setup the multi transition
 fps = 30
-duration_single_trans = 6
-depth_strength = 0.55  # Specifies how deep (in terms of diffusion iterations the first branching happens)
+duration_single_trans = 20
+depth_strength = 0.25  # Specifies how deep (in terms of diffusion iterations the first branching happens)
 
 # Specify a list of prompts below
 list_prompts = []
-list_prompts.append("surrealistic statue made of glitter and dirt, standing in a lake, atmospheric light, strange glow")
-list_prompts.append("statue of a mix between a tree and human, made of marble, incredibly detailed")
-list_prompts.append("weird statue of a frog monkey, many colors, standing next to the ruins of an ancient city")
-# list_prompts.append("statue of a spider that looked like a human")
-# list_prompts.append("statue of a bird that looked like a scorpion")
-# list_prompts.append("statue of an ancient cybernetic messenger annoucing good news, golden, futuristic")
+list_prompts.append("A panoramic photo of a sentient mirror maze amidst a neon-lit forest, where bioluminescent mushrooms glow eerily, reflecting off the mirrors, and cybernetic crows, with silver wings and ruby eyes, perch ominously, David Lynch, Gaspar Noé, Photograph.")
+list_prompts.append("An unsettling tableau of spectral butterflies with clockwork wings, swirling around an antique typewriter perched precariously atop a floating, gnarled tree trunk, a stormy twilight sky, David Lynch's dreamscape, meticulously crafted.")
+# list_prompts.append("A haunting tableau of an antique dollhouse swallowed by a giant venus flytrap under the neon glow of an alien moon, its uncanny light reflecting from shattered porcelain faces and marbles, in a quiet, abandoned amusement park.")
+
 
 # You can optionally specify the seeds
-list_seeds = [954375479, 332539350, 956051013, 408831845, 250009012, 675588737]
-t_compute_max_allowed = 12  # per segment
+list_seeds = [95437579, 33259350, 956051013, 408831845, 250009012, 675588737]
+t_compute_max_allowed = 20  # per segment
 fp_movie = 'movie_example2.mp4'
-lb = LatentBlending(sdh)
+lb = LatentBlending(dh)
+lb.dh.set_dimensions(1024, 704)
+lb.dh.set_num_inference_steps(40)
+
 
 list_movie_parts = []
 for i in range(len(list_prompts) - 1):

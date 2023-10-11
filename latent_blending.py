@@ -111,18 +111,6 @@ class LatentBlending():
         self.set_prompt1("")
         self.set_prompt2("")
 
-    # def init_mode(self):
-    #     r"""
-    #     Sets the operational mode. Currently supported are standard, inpainting and x4 upscaling.
-    #     """
-    #     if isinstance(self.dh.model, LatentUpscaleDiffusion):
-    #         self.mode = 'upscale'
-    #     elif isinstance(self.dh.model, LatentInpaintDiffusion):
-    #         self.dh.image_source = None
-    #         self.dh.mask_image = None
-    #         self.mode = 'inpaint'
-    #     else:
-    #         self.mode = 'standard'
     
     def set_dimensions(self, width=None, height=None):
         self.dh.set_dimensions(width, height)
@@ -449,6 +437,7 @@ class LatentBlending():
             list_compute_steps = self.num_inference_steps - list_idx_injection
             list_compute_steps *= list_nmb_stems
             t_compute = np.sum(list_compute_steps) * self.dt_per_diff + 0.15 * np.sum(list_nmb_stems)
+            t_compute += 2*self.num_inference_steps*self.dt_per_diff # outer branches
             increase_done = False
             for s_idx in range(len(list_nmb_stems) - 1):
                 if list_nmb_stems[s_idx + 1] / list_nmb_stems[s_idx] >= 2:

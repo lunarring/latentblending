@@ -108,10 +108,10 @@ class DiffusersHolder():
             pr_encoder = self.pipe._encode_prompt
 
         prompt_embeds = pr_encoder(
-            prompt,
-            self.device,
-            1,
-            do_classifier_free_guidance,
+            prompt=prompt,
+            device=self.device,
+            num_images_per_prompt=1,
+            do_classifier_free_guidance=do_classifier_free_guidance,
             negative_prompt=self.negative_prompt,
             prompt_embeds=None,
             negative_prompt_embeds=None,
@@ -132,12 +132,14 @@ class DiffusersHolder():
     @torch.no_grad()
     def latent2image(
             self,
-            latents: torch.FloatTensor):
+            latents: torch.FloatTensor,
+            convert_numpy=True):
         r"""
         Returns an image provided a latent representation from diffusion.
         Args:
             latents: torch.FloatTensor
                 Result of the diffusion process.
+            convert_numpy: if converting to numpy
         """
         if self.use_sd_xl:
             # make sure the VAE is in float32 mode, as it overflows in float16
@@ -162,8 +164,12 @@ class DiffusersHolder():
                 latents = latents.float()
 
         image = self.pipe.vae.decode(latents / self.pipe.vae.config.scaling_factor, return_dict=False)[0]
-        image = self.pipe.image_processor.postprocess(image, output_type="pil", do_denormalize=[True] * image.shape[0])
-        return np.asarray(image[0])
+        image = self.pipe.image_processor.postprocess(image, output_type="pil", do_denormalize=[True] * image.shape[0])[0]
+        if convert_numpy:
+            return np.asarray(image)
+        else:
+            return image
+            
 
     def prepare_mixing(self, mixing_coeffs, list_latents_mixing):
         if type(mixing_coeffs) == float:
@@ -266,7 +272,7 @@ class DiffusersHolder():
             return_image: Optional[bool] = False):
         
         # 0. Default height and width to unet
-        original_size = (1024, 1024)  # FIXME
+        original_size = (self.width_img, self.height_img)  # FIXME
         crops_coords_top_left = (0, 0) # FIXME
         target_size = original_size
         batch_size = 1
@@ -277,7 +283,7 @@ class DiffusersHolder():
         do_classifier_free_guidance = self.guidance_scale > 1.0
         
         # 1. Check inputs. Raise error if not correct & 2. Define call parameters
-        list_mixing_coeffs = self.prepare_mixing()
+        list_mixing_coeffs = self.prepare_mixing(mixing_coeffs, list_latents_mixing)
         
         # 3. Encode input prompt (already encoded outside bc of mixing, just split here)
         prompt_embeds, negative_prompt_embeds, pooled_prompt_embeds, negative_pooled_prompt_embeds = text_embeddings
@@ -517,38 +523,26 @@ steps:
 if __name__ == "__main__":
     
     
-    controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-scribble", torch_dtype=torch.float16)
-    pipe = StableDiffusionControlNetPipeline.from_pretrained(
-        "runwayml/stable-diffusion-v1-5", controlnet=controlnet, torch_dtype=torch.float16
-    ).to("cuda")
+    #%% 
+    pretrained_model_name_or_path = "stabilityai/stable-diffusion-xl-base-1.0"
+    pipe = DiffusionPipeline.from_pretrained(pretrained_model_name_or_path, torch_dtype=torch.float16)
+    pipe.to('cuda:1')    # xxx
     
+    #%%
     self = DiffusersHolder(pipe)
+    # xxx
+    self.set_dimensions(1024, 704)
+    self.set_num_inference_steps(40)
+    # self.set_dimensions(1536, 1024)
+    prompt = "Surreal painting of eerie, nebulous glow of an indigo moon, a spine-chilling spectacle unfolds; a baroque, marbled hand reaches out from a viscous, purple lake clutching a melting clock, its face distorted in a never-ending scream of hysteria, while a cluster of laughing orchids, their petals morphed into grotesque human lips, festoon a crimson tree weeping blood instead of sap, a psychedelic cat with an unnaturally playful grin and mismatched eyes lounges atop a floating vintage television showing static, an albino peacock with iridescent, crystalline feathers dances around a towering, inverted pyramid on top of which a humanoid figure with an octopus head lounges seductively, all against the backdrop of a sprawling cityscape where buildings are inverted and writhing as if alive, and the sky is punctuated by floating aquatic creatures glowing neon, adding a touch of haunting beauty to this otherwise deeply unsettling tableau"
+    text_embeddings = self.get_text_embedding(prompt)
+    generator = torch.Generator(device=self.device).manual_seed(int(420))
+    latents_start = self.get_noise()
+    list_latents_1 = self.run_diffusion(text_embeddings, latents_start)
+    img_orig = self.latent2image(list_latents_1[-1])
     
-    # get text encoding
-    
-    # get image encoding
     
 
-    
-    
-    #%% 
-    # # pretrained_model_name_or_path = "stabilityai/stable-diffusion-xl-base-0.9"
-    # pretrained_model_name_or_path = "stabilityai/stable-diffusion-2-1" 
-    # pipe = DiffusionPipeline.from_pretrained(pretrained_model_name_or_path, torch_dtype=torch.float16)
-    # pipe.to('cuda')
-    # # xxx
-    # self = DiffusersHolder(pipe)
-    # # xxx
-    # self.set_num_inference_steps(50)
-    # # self.set_dimensions(1536, 1024)
-    # prompt = "photo of a beautiful cherry forest covered in white flowers, ambient light, very detailed, magic"
-    # text_embeddings = self.get_text_embedding(prompt)
-    # generator = torch.Generator(device=self.device).manual_seed(int(420))
-    # latents_start = self.get_noise()
-    # list_latents_1 = self.run_diffusion(text_embeddings, latents_start)
-    # img_orig = self.latent2image(list_latents_1[-1])
-    
-    
     
     # %%
     
