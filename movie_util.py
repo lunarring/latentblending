@@ -28,7 +28,7 @@ class MovieSaver():
             fp_out: str,
             fps: int = 24,
             shape_hw: List[int] = None,
-            crf: int = 24,
+            crf: int = 21,
             codec: str = 'libx264',
             preset: str = 'fast',
             pix_fmt: str = 'yuv420p',
