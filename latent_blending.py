@@ -107,15 +107,19 @@ class LatentBlending():
         self.dt_per_diff = 0
         self.spatial_mask = None
         self.lpips = lpips.LPIPS(net='alex').cuda(self.device)
-        
+
         self.set_prompt1("")
         self.set_prompt2("")
 
-    
-    def set_dimensions(self, width=None, height=None):
-        self.dh.set_dimensions(width, height)
-
-        
+    def set_dimensions(self, size_output=None):
+        r"""
+        sets the size of the output video.
+        Args:
+            size_output: tuple
+                width x height
+                Note: the size will get automatically adjusted to be divisable by 32.
+        """
+        self.dh.set_dimensions(size_output)
 
     def set_guidance_scale(self, guidance_scale):
         r"""

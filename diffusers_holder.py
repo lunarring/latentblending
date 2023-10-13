@@ -43,16 +43,15 @@ class DiffusersHolder():
         self.negative_prompt = ""
         self.guidance_scale = 5.0
         self.num_inference_steps = 30
-        
+
         # Check if valid pipe
         self.pipe = pipe
         self.device = str(pipe._execution_device)
         self.init_types()
-        
+
         self.width_latent = self.pipe.unet.config.sample_size
         self.height_latent = self.pipe.unet.config.sample_size
-        
-        
+
     def init_types(self):
         assert hasattr(self.pipe, "__class__"), "No valid diffusers pipeline found."
         assert hasattr(self.pipe.__class__, "__name__"), "No valid diffusers pipeline found."
@@ -65,29 +64,28 @@ class DiffusersHolder():
             prompt_embeds = self.pipe._encode_prompt("test", self.device, 1, True)
         self.dtype = prompt_embeds.dtype
 
-
     def set_num_inference_steps(self, num_inference_steps):
         self.num_inference_steps = num_inference_steps
         if self.use_sd_xl:
             self.pipe.scheduler.set_timesteps(self.num_inference_steps, device=self.device)
 
-
-    def set_dimensions(self, width, height):
+    def set_dimensions(self, size_output):
+        width, height = size_output
         s = self.pipe.vae_scale_factor
         if width is None:
-            self.width_latent = self.pipe.unet.config.sample_size 
+            self.width_latent = self.pipe.unet.config.sample_size
             self.width_img = self.width_latent * self.pipe.vae_scale_factor
         else:
             self.width_img = int(round(width / s) * s)
             self.width_latent = int(self.width_img / s)
-            
+
         if height is None:
-            self.height_latent = self.pipe.unet.config.sample_size 
+            self.height_latent = self.pipe.unet.config.sample_size
             self.height_img = self.width_latent * self.pipe.vae_scale_factor
         else:
             self.height_img = int(round(height / s) * s)
             self.height_latent = int(self.height_img / s)
-        
+        print(f"set_dimensions to width={width} and height={height}")
 
     def set_negative_prompt(self, negative_prompt):
         r"""Set the negative prompt. Currenty only one negative prompt is supported
@@ -503,19 +501,6 @@ class DiffusersHolder():
         else:
             return list_latents_out
     
-#%%
-
-"""
-steps:
-    x get controlnet vanilla running.
-    - externalize conditions
-    - have conditions as input (use one list)
-    - include latent blending
-    - test latent blending
-    - have lora and latent blending
-    
-"""
-
 
 
 #%%
@@ -543,22 +528,4 @@ if __name__ == "__main__":
     
     
 
-    
-    # %%
-    
-    """
-    OPEN
-        - rename text encodings to conditionings
-        - other examples
-        - kill upscaling? or keep?
-        - cleanup
-            - ldh
-            - sdh class
-            - diffusion holder
-            - check linting
-            - check docstrings
-        - fix readme
-    """    
-    
-    
    
