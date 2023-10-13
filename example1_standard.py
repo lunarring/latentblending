@@ -24,16 +24,15 @@ from diffusers_holder import DiffusersHolder
 from diffusers import DiffusionPipeline
 
 # %% First let us spawn a stable diffusion holder. Uncomment your version of choice.
-# dh = DiffusersHolder("stabilityai/stable-diffusion-xl-base-0.9")
-pretrained_model_name_or_path = "stabilityai/stable-diffusion-xl-base-0.9"
+pretrained_model_name_or_path = "stabilityai/stable-diffusion-xl-base-1.0"
 pipe = DiffusionPipeline.from_pretrained(pretrained_model_name_or_path, torch_dtype=torch.float16)
 pipe.to('cuda')
 dh = DiffusersHolder(pipe)
 # %% Next let's set up all parameters
 depth_strength = 0.55  # Specifies how deep (in terms of diffusion iterations the first branching happens)
 t_compute_max_allowed = 60  # Determines the quality of the transition in terms of compute time you grant it
-fixed_seeds = [6913192, 504443080]
 num_inference_steps = 50
+size_output = (1024, 768)
 
 prompt1 = "underwater landscape, fish, und the sea, incredible detail, high resolution"
 prompt2 = "rendering of an alien planet, strange plants, strange creatures, surreal"
@@ -45,14 +44,13 @@ duration_transition = 12  # In seconds
 lb = LatentBlending(dh)
 lb.set_prompt1(prompt1)
 lb.set_prompt2(prompt2)
-lb.set_dimensions(1536, 1024)
+lb.set_dimensions(size_output)
 
 # Run latent blending
 lb.run_transition(
     depth_strength=depth_strength,
     num_inference_steps=num_inference_steps,
-    t_compute_max_allowed=t_compute_max_allowed,
-    fixed_seeds=fixed_seeds)
+    t_compute_max_allowed=t_compute_max_allowed)
 
 # Save movie
 lb.write_movie_transition(fp_movie, duration_transition)
