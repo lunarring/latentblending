@@ -70,21 +70,18 @@ class DiffusersHolder():
             self.pipe.scheduler.set_timesteps(self.num_inference_steps, device=self.device)
 
     def set_dimensions(self, size_output):
-        width, height = size_output
         s = self.pipe.vae_scale_factor
-        if width is None:
-            self.width_latent = self.pipe.unet.config.sample_size
-            self.width_img = self.width_latent * self.pipe.vae_scale_factor
-        else:
-            self.width_img = int(round(width / s) * s)
-            self.width_latent = int(self.width_img / s)
 
-        if height is None:
-            self.height_latent = self.pipe.unet.config.sample_size
-            self.height_img = self.width_latent * self.pipe.vae_scale_factor
+        if size_output is None:
+            width = self.pipe.unet.config.sample_size
+            height = self.pipe.unet.config.sample_size
         else:
-            self.height_img = int(round(height / s) * s)
-            self.height_latent = int(self.height_img / s)
+            width, height = size_output
+        
+        self.width_img = int(round(width / s) * s)
+        self.width_latent = int(self.width_img / s)
+        self.height_img = int(round(height / s) * s)
+        self.height_latent = int(self.height_img / s)
         print(f"set_dimensions to width={width} and height={height}")
 
     def set_negative_prompt(self, negative_prompt):
@@ -516,7 +513,7 @@ if __name__ == "__main__":
     #%%
     self = DiffusersHolder(pipe)
     # xxx
-    self.set_dimensions(1024, 704)
+    self.set_dimensions((1024, 704))
     self.set_num_inference_steps(40)
     # self.set_dimensions(1536, 1024)
     prompt = "Surreal painting of eerie, nebulous glow of an indigo moon, a spine-chilling spectacle unfolds; a baroque, marbled hand reaches out from a viscous, purple lake clutching a melting clock, its face distorted in a never-ending scream of hysteria, while a cluster of laughing orchids, their petals morphed into grotesque human lips, festoon a crimson tree weeping blood instead of sap, a psychedelic cat with an unnaturally playful grin and mismatched eyes lounges atop a floating vintage television showing static, an albino peacock with iridescent, crystalline feathers dances around a towering, inverted pyramid on top of which a humanoid figure with an octopus head lounges seductively, all against the backdrop of a sprawling cityscape where buildings are inverted and writhing as if alive, and the sky is punctuated by floating aquatic creatures glowing neon, adding a touch of haunting beauty to this otherwise deeply unsettling tableau"
