@@ -295,19 +295,54 @@ class DiffusersHolder():
         extra_step_kwargs = self.pipe.prepare_extra_step_kwargs(generator, eta)  # dummy
 
         # 7. Prepare added time ids & embeddings
+        # add_text_embeds = pooled_prompt_embeds
+        # add_time_ids = self.pipe._get_add_time_ids(
+        #     original_size, crops_coords_top_left, target_size, dtype=prompt_embeds.dtype
+        # )
+
+        # if do_classifier_free_guidance:
+        #     prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
+        #     add_text_embeds = torch.cat([negative_pooled_prompt_embeds, add_text_embeds], dim=0)
+        #     add_time_ids = torch.cat([add_time_ids, add_time_ids], dim=0)
+
+        # prompt_embeds = prompt_embeds.to(self.device)
+        # add_text_embeds = add_text_embeds.to(self.device)
+        # add_time_ids = add_time_ids.to(self.device).repeat(batch_size * num_images_per_prompt, 1)
+        
+        # 7. Prepare added time ids & embeddings
         add_text_embeds = pooled_prompt_embeds
+        if self.pipe.text_encoder_2 is None:
+            text_encoder_projection_dim = int(pooled_prompt_embeds.shape[-1])
+        else:
+            text_encoder_projection_dim = self.pipe.text_encoder_2.config.projection_dim
+        
         add_time_ids = self.pipe._get_add_time_ids(
-            original_size, crops_coords_top_left, target_size, dtype=prompt_embeds.dtype
+            original_size,
+            crops_coords_top_left,
+            target_size,
+            dtype=prompt_embeds.dtype,
+            text_encoder_projection_dim=text_encoder_projection_dim,
         )
-
-        if do_classifier_free_guidance:
-            prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
-            add_text_embeds = torch.cat([negative_pooled_prompt_embeds, add_text_embeds], dim=0)
-            add_time_ids = torch.cat([add_time_ids, add_time_ids], dim=0)
-
+        # if negative_original_size is not None and negative_target_size is not None:
+        #     negative_add_time_ids = self.pipe._get_add_time_ids(
+        #         negative_original_size,
+        #         negative_crops_coords_top_left,
+        #         negative_target_size,
+        #         dtype=prompt_embeds.dtype,
+        #         text_encoder_projection_dim=text_encoder_projection_dim,
+        #     )
+        # else:
+        negative_add_time_ids = add_time_ids
+        
+        prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
+        add_text_embeds = torch.cat([negative_pooled_prompt_embeds, add_text_embeds], dim=0)
+        add_time_ids = torch.cat([negative_add_time_ids, add_time_ids], dim=0)
+        
         prompt_embeds = prompt_embeds.to(self.device)
         add_text_embeds = add_text_embeds.to(self.device)
         add_time_ids = add_time_ids.to(self.device).repeat(batch_size * num_images_per_prompt, 1)
+        
+        
 
         # 8. Denoising loop
         for i, t in enumerate(timesteps):
@@ -508,7 +543,7 @@ if __name__ == "__main__":
     #%% 
     pretrained_model_name_or_path = "stabilityai/stable-diffusion-xl-base-1.0"
     pipe = DiffusionPipeline.from_pretrained(pretrained_model_name_or_path, torch_dtype=torch.float16)
-    pipe.to('cuda:1')    # xxx
+    pipe.to('cuda')    # xxx
     
     #%%
     self = DiffusersHolder(pipe)

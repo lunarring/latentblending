@@ -28,7 +28,7 @@ from huggingface_hub import hf_hub_download
 # %% First let us spawn a stable diffusion holder. Uncomment your version of choice.
 pretrained_model_name_or_path = "stabilityai/stable-diffusion-xl-base-1.0"
 pipe = DiffusionPipeline.from_pretrained(pretrained_model_name_or_path, torch_dtype=torch.float16)
-pipe.to('cuda:1')
+pipe.to('cuda')
 dh = DiffusersHolder(pipe)
 
 # %% Let's setup the multi transition
