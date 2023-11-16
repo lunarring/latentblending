@@ -38,9 +38,9 @@ num_inference_steps = 30
 
 # Specify a list of prompts below
 list_prompts = []
-list_prompts.append("A beautiful astronomic photo of a nebula, with intricate microscopic structures, mitochondria")
-list_prompts.append("Microscope fluorescence photo, cell filaments, intricate galaxy, astronomic nebula")
-list_prompts.append("telescope photo starry sky, nebula, cell core, dna, stunning")
+list_prompts.append("Photo of a house, high detail")
+list_prompts.append("Photo of an elephant in african savannah")
+list_prompts.append("photo of a house, high detail")
 
 
 # You can optionally specify the seeds
