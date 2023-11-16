@@ -13,20 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import torch
-torch.backends.cudnn.benchmark = False
-torch.set_grad_enabled(False)
 import numpy as np
 import warnings
-warnings.filterwarnings('ignore')
-import warnings
-import torch
-from PIL import Image
-import torch
+
 from typing import Optional
-from torch import autocast
-from contextlib import nullcontext
 from utils import interpolate_spherical
 from diffusers import DiffusionPipeline, StableDiffusionControlNetPipeline, ControlNetModel
 from diffusers.models.attention_processor import (
@@ -35,6 +26,9 @@ from diffusers.models.attention_processor import (
     LoRAXFormersAttnProcessor,
     XFormersAttnProcessor,
 )
+warnings.filterwarnings('ignore')
+torch.backends.cudnn.benchmark = False
+torch.set_grad_enabled(False)
 
 
 class DiffusersHolder():
@@ -71,13 +65,11 @@ class DiffusersHolder():
 
     def set_dimensions(self, size_output):
         s = self.pipe.vae_scale_factor
-
         if size_output is None:
             width = self.pipe.unet.config.sample_size
             height = self.pipe.unet.config.sample_size
         else:
             width, height = size_output
-        
         self.width_img = int(round(width / s) * s)
         self.width_latent = int(self.width_img / s)
         self.height_img = int(round(height / s) * s)
@@ -94,7 +86,6 @@ class DiffusersHolder():
 
         if len(self.negative_prompt) > 1:
             self.negative_prompt = [self.negative_prompt[0]]
-
 
     def get_text_embedding(self, prompt, do_classifier_free_guidance=True):
         if self.use_sd_xl:
@@ -114,7 +105,7 @@ class DiffusersHolder():
         )
         return prompt_embeds
 
-    def get_noise(self, seed=420, mode=None):
+    def get_noise(self, seed=420):
         H = self.height_latent
         W = self.width_latent
         C = self.pipe.unet.config.in_channels
@@ -164,7 +155,6 @@ class DiffusersHolder():
             return np.asarray(image)
         else:
             return image
-            
 
     def prepare_mixing(self, mixing_coeffs, list_latents_mixing):
         if type(mixing_coeffs) == float:
@@ -265,10 +255,10 @@ class DiffusersHolder():
             list_latents_mixing=None,
             mixing_coeffs=0.0,
             return_image: Optional[bool] = False):
-        
+
         # 0. Default height and width to unet
-        original_size = (self.width_img, self.height_img)  # FIXME
-        crops_coords_top_left = (0, 0) # FIXME
+        original_size = (self.width_img, self.height_img)
+        crops_coords_top_left = (0, 0)
         target_size = original_size
         batch_size = 1
         eta = 0.0
@@ -276,10 +266,10 @@ class DiffusersHolder():
         cross_attention_kwargs = None
         generator = torch.Generator(device=self.device)  # dummy generator
         do_classifier_free_guidance = self.guidance_scale > 1.0
-        
+
         # 1. Check inputs. Raise error if not correct & 2. Define call parameters
         list_mixing_coeffs = self.prepare_mixing(mixing_coeffs, list_latents_mixing)
-        
+
         # 3. Encode input prompt (already encoded outside bc of mixing, just split here)
         prompt_embeds, negative_prompt_embeds, pooled_prompt_embeds, negative_pooled_prompt_embeds = text_embeddings
 
@@ -295,27 +285,12 @@ class DiffusersHolder():
         extra_step_kwargs = self.pipe.prepare_extra_step_kwargs(generator, eta)  # dummy
 
         # 7. Prepare added time ids & embeddings
-        # add_text_embeds = pooled_prompt_embeds
-        # add_time_ids = self.pipe._get_add_time_ids(
-        #     original_size, crops_coords_top_left, target_size, dtype=prompt_embeds.dtype
-        # )
-
-        # if do_classifier_free_guidance:
-        #     prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
-        #     add_text_embeds = torch.cat([negative_pooled_prompt_embeds, add_text_embeds], dim=0)
-        #     add_time_ids = torch.cat([add_time_ids, add_time_ids], dim=0)
-
-        # prompt_embeds = prompt_embeds.to(self.device)
-        # add_text_embeds = add_text_embeds.to(self.device)
-        # add_time_ids = add_time_ids.to(self.device).repeat(batch_size * num_images_per_prompt, 1)
-        
-        # 7. Prepare added time ids & embeddings
         add_text_embeds = pooled_prompt_embeds
         if self.pipe.text_encoder_2 is None:
             text_encoder_projection_dim = int(pooled_prompt_embeds.shape[-1])
         else:
             text_encoder_projection_dim = self.pipe.text_encoder_2.config.projection_dim
-        
+
         add_time_ids = self.pipe._get_add_time_ids(
             original_size,
             crops_coords_top_left,
@@ -323,26 +298,16 @@ class DiffusersHolder():
             dtype=prompt_embeds.dtype,
             text_encoder_projection_dim=text_encoder_projection_dim,
         )
-        # if negative_original_size is not None and negative_target_size is not None:
-        #     negative_add_time_ids = self.pipe._get_add_time_ids(
-        #         negative_original_size,
-        #         negative_crops_coords_top_left,
-        #         negative_target_size,
-        #         dtype=prompt_embeds.dtype,
-        #         text_encoder_projection_dim=text_encoder_projection_dim,
-        #     )
-        # else:
+
         negative_add_time_ids = add_time_ids
-        
+
         prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
         add_text_embeds = torch.cat([negative_pooled_prompt_embeds, add_text_embeds], dim=0)
         add_time_ids = torch.cat([negative_add_time_ids, add_time_ids], dim=0)
-        
+
         prompt_embeds = prompt_embeds.to(self.device)
         add_text_embeds = add_text_embeds.to(self.device)
         add_time_ids = add_time_ids.to(self.device).repeat(batch_size * num_images_per_prompt, 1)
-        
-        
 
         # 8. Denoising loop
         for i, t in enumerate(timesteps):
@@ -357,7 +322,6 @@ class DiffusersHolder():
             if i > 0 and list_mixing_coeffs[i] > 0:
                 latents_mixtarget = list_latents_mixing[i - 1].clone()
                 latents = interpolate_spherical(latents, latents_mixtarget, list_mixing_coeffs[i])
-
 
             # expand the latents if we are doing classifier free guidance
             latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
@@ -380,14 +344,12 @@ class DiffusersHolder():
                 noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
                 noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
 
-            # FIXME guidance_rescale disabled
-
             # compute the previous noisy sample x_t -> x_t-1
             latents = self.pipe.scheduler.step(noise_pred, t, latents, **extra_step_kwargs, return_dict=False)[0]
 
             # Append latents
             list_latents_out.append(latents.clone())
-        
+
         if return_image:
             return self.latent2image(latents)
         else:
@@ -415,7 +377,7 @@ class DiffusersHolder():
         batch_size = 1
         eta = 0.0
         controlnet_conditioning_scale = 1.0
-        
+       
         # align format for control guidance
         if not isinstance(control_guidance_start, list) and isinstance(control_guidance_end, list):
             control_guidance_start = len(control_guidance_end) * [control_guidance_start]
@@ -527,19 +489,16 @@ class DiffusersHolder():
 
             # Append latents
             list_latents_out.append(latents.clone())
-        
+
         if return_image:
             return self.latent2image(latents)
         else:
             return list_latents_out
-    
 
 
 #%%
-
 if __name__ == "__main__":
-    
-    
+    from PIL import Image
     #%% 
     pretrained_model_name_or_path = "stabilityai/stable-diffusion-xl-base-1.0"
     pipe = DiffusionPipeline.from_pretrained(pretrained_model_name_or_path, torch_dtype=torch.float16)

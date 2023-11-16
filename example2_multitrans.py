@@ -14,16 +14,14 @@
 # limitations under the License.
 
 import torch
-torch.backends.cudnn.benchmark = False
-torch.set_grad_enabled(False)
-import warnings
-warnings.filterwarnings('ignore')
 import warnings
 from latent_blending import LatentBlending
 from diffusers_holder import DiffusersHolder
 from diffusers import DiffusionPipeline
 from movie_util import concatenate_movies
-from huggingface_hub import hf_hub_download
+torch.set_grad_enabled(False)
+torch.backends.cudnn.benchmark = False
+warnings.filterwarnings('ignore')
 
 # %% First let us spawn a stable diffusion holder. Uncomment your version of choice.
 pretrained_model_name_or_path = "stabilityai/stable-diffusion-xl-base-1.0"
@@ -35,21 +33,23 @@ dh = DiffusersHolder(pipe)
 fps = 30
 duration_single_trans = 20
 depth_strength = 0.25  # Specifies how deep (in terms of diffusion iterations the first branching happens)
+size_output = (1280, 768)
+num_inference_steps = 30
 
 # Specify a list of prompts below
 list_prompts = []
-list_prompts.append("A panoramic photo of a sentient mirror maze amidst a neon-lit forest, where bioluminescent mushrooms glow eerily, reflecting off the mirrors, and cybernetic crows, with silver wings and ruby eyes, perch ominously, David Lynch, Gaspar Noé, Photograph.")
-list_prompts.append("An unsettling tableau of spectral butterflies with clockwork wings, swirling around an antique typewriter perched precariously atop a floating, gnarled tree trunk, a stormy twilight sky, David Lynch's dreamscape, meticulously crafted.")
-# list_prompts.append("A haunting tableau of an antique dollhouse swallowed by a giant venus flytrap under the neon glow of an alien moon, its uncanny light reflecting from shattered porcelain faces and marbles, in a quiet, abandoned amusement park.")
+list_prompts.append("A beautiful astronomic photo of a nebula, with intricate microscopic structures, mitochondria")
+list_prompts.append("Microscope fluorescence photo, cell filaments, intricate galaxy, astronomic nebula")
+list_prompts.append("telescope photo starry sky, nebula, cell core, dna, stunning")
 
 
 # You can optionally specify the seeds
-list_seeds = [95437579, 33259350, 956051013, 408831845, 250009012, 675588737]
+list_seeds = [95437579, 33259350, 956051013]
 t_compute_max_allowed = 20  # per segment
 fp_movie = 'movie_example2.mp4'
 lb = LatentBlending(dh)
-lb.dh.set_dimensions(1024, 704)
-lb.dh.set_num_inference_steps(40)
+lb.set_dimensions(size_output)
+lb.dh.set_num_inference_steps(num_inference_steps)
 
 
 list_movie_parts = []
@@ -68,7 +68,7 @@ for i in range(len(list_prompts) - 1):
     fixed_seeds = list_seeds[i:i + 2]
     # Run latent blending
     lb.run_transition(
-        recycle_img1 = recycle_img1,
+        recycle_img1=recycle_img1,
         depth_strength=depth_strength,
         t_compute_max_allowed=t_compute_max_allowed,
         fixed_seeds=fixed_seeds)

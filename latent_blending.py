@@ -15,19 +15,18 @@
 
 import os
 import torch
-torch.backends.cudnn.benchmark = False
-torch.set_grad_enabled(False)
 import numpy as np
 import warnings
-warnings.filterwarnings('ignore')
 import time
-import warnings
 from tqdm.auto import tqdm
 from PIL import Image
 from movie_util import MovieSaver
 from typing import List, Optional
 import lpips
 from utils import interpolate_spherical, interpolate_linear, add_frames_linear_interp, yml_load, yml_save
+warnings.filterwarnings('ignore')
+torch.backends.cudnn.benchmark = False
+torch.set_grad_enabled(False)
 
 
 class LatentBlending():
@@ -70,7 +69,6 @@ class LatentBlending():
         # Initialize vars
         self.prompt1 = ""
         self.prompt2 = ""
-        self.negative_prompt = ""
 
         self.tree_latents = [None, None]
         self.tree_fracts = None
@@ -91,17 +89,15 @@ class LatentBlending():
         self.list_nmb_branches = None
 
         # Mixing parameters
-        self.branch1_crossfeed_power = 0.05
-        self.branch1_crossfeed_range = 0.4
-        self.branch1_crossfeed_decay = 0.9
+        self.branch1_crossfeed_power = 0.3
+        self.branch1_crossfeed_range = 0.3
+        self.branch1_crossfeed_decay = 0.99
 
-        self.parental_crossfeed_power = 0.1
-        self.parental_crossfeed_range = 0.8
-        self.parental_crossfeed_power_decay = 0.8
+        self.parental_crossfeed_power = 0.3
+        self.parental_crossfeed_range = 0.6
+        self.parental_crossfeed_power_decay = 0.9
 
         self.set_guidance_scale(guidance_scale)
-        self.mode = 'standard'
-        # self.init_mode()
         self.multi_transition_img_first = None
         self.multi_transition_img_last = None
         self.dt_per_diff = 0
@@ -441,7 +437,7 @@ class LatentBlending():
             list_compute_steps = self.num_inference_steps - list_idx_injection
             list_compute_steps *= list_nmb_stems
             t_compute = np.sum(list_compute_steps) * self.dt_per_diff + 0.15 * np.sum(list_nmb_stems)
-            t_compute += 2*self.num_inference_steps*self.dt_per_diff # outer branches
+            t_compute += 2 * self.num_inference_steps * self.dt_per_diff  # outer branches
             increase_done = False
             for s_idx in range(len(list_nmb_stems) - 1):
                 if list_nmb_stems[s_idx + 1] / list_nmb_stems[s_idx] >= 2:
@@ -522,7 +518,7 @@ class LatentBlending():
         Args:
             seed: int
         """
-        return self.dh.get_noise(seed, self.mode)
+        return self.dh.get_noise(seed)
 
     @torch.no_grad()
     def run_diffusion(
@@ -575,18 +571,6 @@ class LatentBlending():
                 list_latents_mixing=list_latents_mixing,
                 mixing_coeffs=mixing_coeffs,
                 return_image=return_image)
-
-        # elif self.mode == 'upscale':
-        #     cond = list_conditionings[0]
-        #     uc_full = list_conditionings[1]
-        #     return self.dh.run_diffusion_upscaling(
-        #         cond,
-        #         uc_full,
-        #         latents_start=latents_start,
-        #         idx_start=idx_start,
-        #         list_latents_mixing=list_latents_mixing,
-        #         mixing_coeffs=mixing_coeffs,
-        #         return_image=return_image)
 
     def run_upscaling(
             self,
@@ -682,25 +666,6 @@ class LatentBlending():
             text_embeddings_mix = interpolate_linear(self.text_embedding1, self.text_embedding2, fract_mixing)
             list_conditionings = [text_embeddings_mix]
         return list_conditionings
-
-    # @torch.no_grad()
-    # def get_mixed_conditioning(self, fract_mixing):
-    #     if self.mode == 'standard':
-    #         text_embeddings_mix = interpolate_linear(self.text_embedding1, self.text_embedding2, fract_mixing)
-    #         list_conditionings = [text_embeddings_mix]
-    #     elif self.mode == 'inpaint':
-    #         text_embeddings_mix = interpolate_linear(self.text_embedding1, self.text_embedding2, fract_mixing)
-    #         list_conditionings = [text_embeddings_mix]
-    #     elif self.mode == 'upscale':
-    #         text_embeddings_mix = interpolate_linear(self.text_embedding1, self.text_embedding2, fract_mixing)
-    #         cond, uc_full = self.dh.get_cond_upscaling(self.image1_lowres, text_embeddings_mix, self.noise_level_upscaling)
-    #         condB, uc_fullB = self.dh.get_cond_upscaling(self.image2_lowres, text_embeddings_mix, self.noise_level_upscaling)
-    #         cond['c_concat'][0] = interpolate_spherical(cond['c_concat'][0], condB['c_concat'][0], fract_mixing)
-    #         uc_full['c_concat'][0] = interpolate_spherical(uc_full['c_concat'][0], uc_fullB['c_concat'][0], fract_mixing)
-    #         list_conditionings = [cond, uc_full]
-    #     else:
-    #         raise ValueError(f"mix_conditioning: unknown mode {self.mode}")
-    #     return list_conditionings
 
     @torch.no_grad()
     def get_text_embeddings(
