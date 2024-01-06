@@ -24,7 +24,7 @@ import datetime
 from typing import List, Union
 torch.set_grad_enabled(False)
 import yaml
-
+import PIL
 
 @torch.no_grad()
 def interpolate_spherical(p0, p1, fract_mixing: float):
