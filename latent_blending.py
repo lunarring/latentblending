@@ -797,10 +797,10 @@ class LatentBlending():
         Used to determine the optimal point of insertion to create smooth transitions.
         High values indicate low similarity.
         """
-        tensorA = torch.from_numpy(imgA).float().cuda(self.device)
+        tensorA = torch.from_numpy(np.asarray(imgA)).float().cuda(self.device)
         tensorA = 2 * tensorA / 255.0 - 1
         tensorA = tensorA.permute([2, 0, 1]).unsqueeze(0)
-        tensorB = torch.from_numpy(imgB).float().cuda(self.device)
+        tensorB = torch.from_numpy(np.asarray(imgB)).float().cuda(self.device)
         tensorB = 2 * tensorB / 255.0 - 1
         tensorB = tensorB.permute([2, 0, 1]).unsqueeze(0)
         lploss = self.lpips(tensorA, tensorB)
@@ -831,3 +831,65 @@ class LatentBlending():
             b_parent1 = tmp
 
         return b_parent1, b_parent2
+
+
+if __name__ == "__main__":
+    
+    # %% First let us spawn a stable diffusion holder. Uncomment your version of choice.
+    from diffusers_holder import DiffusersHolder
+    from diffusers import DiffusionPipeline
+    from diffusers import AutoencoderTiny
+    pipe = DiffusionPipeline.from_pretrained("stabilityai/sdxl-turbo", torch_dtype=torch.float16, variant="fp16")
+    pipe.to("cuda")
+    # pipe.vae = AutoencoderTiny.from_pretrained('madebyollin/taesdxl', torch_device='cuda', torch_dtype=torch.float16)
+    # pipe.vae = pipe.vae.cuda()
+
+    dh = DiffusersHolder(pipe)
+    # %% Next let's set up all parameters
+    depth_strength = 0.5  # Specifies how deep (in terms of diffusion iterations the first branching happens)
+    t_compute_max_allowed = 3  # Determines the quality of the transition in terms of compute time you grant it
+    num_inference_steps = 4
+    size_output = (512, 512)
+
+
+    prompt1 = "underwater landscape, fish, und the sea, incredible detail, high resolution"
+    prompt2 = "rendering of an alien planet, strange plants, strange creatures, surreal"
+    negative_prompt = "blurry, ugly, pale"  # Optional
+
+    fp_movie = 'movie_example1.mp4'
+    duration_transition = 12  # In seconds
+
+    # Spawn latent blending
+    lb = LatentBlending(dh)
+    lb.set_prompt1(prompt1)
+    lb.set_prompt2(prompt2)
+    lb.set_dimensions(size_output)
+    lb.set_negative_prompt(negative_prompt)
+    lb.set_guidance_scale(0)
+    
+    lb.branch1_crossfeed_power = 0.3
+    lb.branch1_crossfeed_range = 0.6
+    lb.branch1_crossfeed_decay = 0.99
+    
+    lb.parental_crossfeed_power = 0.8
+    lb.parental_crossfeed_power_decay = 1.0
+    lb.parental_crossfeed_range = 1.0
+
+    # Run latent blending
+    lb.run_transition(
+        depth_strength=depth_strength,
+        num_inference_steps=num_inference_steps,
+        t_compute_max_allowed=t_compute_max_allowed)
+
+
+    # Save movie
+    lb.write_movie_transition(fp_movie, duration_transition)
+
+    #%%
+    
+    """
+    checkout sizes
+    checkout good tree for num inference steps
+    checkout that good nmb inference step given
+    
+    """

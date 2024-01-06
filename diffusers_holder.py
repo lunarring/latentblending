@@ -773,6 +773,10 @@ if __name__ == "__main__":
     
     self.run_diffusion_sd_xl(text_embeddings_mix, latents_start_mixed, idx_start=idx_start, return_image=True)
     
+    #%%
+    fract=0.8
+    latentsmix = interpolate_spherical(latents1[-1], latents2[-1], fract)
+    self.latent2image(latentsmix)
     
     
 
