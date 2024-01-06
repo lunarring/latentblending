@@ -142,6 +142,8 @@ def add_frames_linear_interp(
     if nmb_frames_missing < 1:
         return list_imgs
 
+    if type(list_imgs[0]) == PIL.Image.Image:
+        list_imgs = [np.asarray(l) for l in list_imgs]
     list_imgs_float = [img.astype(np.float32) for img in list_imgs]
     # Distribute missing frames, append nmb_frames_to_insert(i) frames for each frame
     mean_nmb_frames_insert = nmb_frames_missing / nmb_frames_diff
