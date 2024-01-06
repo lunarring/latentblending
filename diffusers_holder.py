@@ -26,6 +26,7 @@ from diffusers.models.attention_processor import (
     LoRAXFormersAttnProcessor,
     XFormersAttnProcessor,
 )
+from diffusers.pipelines.stable_diffusion_xl.pipeline_stable_diffusion_xl import retrieve_timesteps
 warnings.filterwarnings('ignore')
 torch.backends.cudnn.benchmark = False
 torch.set_grad_enabled(False)
