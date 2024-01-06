@@ -847,7 +847,7 @@ if __name__ == "__main__":
     dh = DiffusersHolder(pipe)
     # %% Next let's set up all parameters
     depth_strength = 0.5  # Specifies how deep (in terms of diffusion iterations the first branching happens)
-    t_compute_max_allowed = 3  # Determines the quality of the transition in terms of compute time you grant it
+    t_compute_max_allowed = 5  # Determines the quality of the transition in terms of compute time you grant it
     num_inference_steps = 4
     size_output = (512, 512)
 
@@ -867,11 +867,11 @@ if __name__ == "__main__":
     lb.set_negative_prompt(negative_prompt)
     lb.set_guidance_scale(0)
     
-    lb.branch1_crossfeed_power = 0.3
+    lb.branch1_crossfeed_power = 0.0
     lb.branch1_crossfeed_range = 0.6
     lb.branch1_crossfeed_decay = 0.99
     
-    lb.parental_crossfeed_power = 0.8
+    lb.parental_crossfeed_power = 1.0
     lb.parental_crossfeed_power_decay = 1.0
     lb.parental_crossfeed_range = 1.0
 
