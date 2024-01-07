@@ -46,8 +46,8 @@ class DiffusersHolder():
 
         self.width_latent = self.pipe.unet.config.sample_size
         self.height_latent = self.pipe.unet.config.sample_size
-        self.width_image = self.width_latent  * self.pipe.vae_scale_factor
-        self.height_image = self.height_latent  * self.pipe.vae_scale_factor
+        self.width_img = self.width_latent  * self.pipe.vae_scale_factor
+        self.height_img = self.height_latent  * self.pipe.vae_scale_factor
 
     def init_types(self):
         assert hasattr(self.pipe, "__class__"), "No valid diffusers pipeline found."
@@ -119,8 +119,8 @@ class DiffusersHolder():
         latents = self.pipe.prepare_latents(
             1,
             self.pipe.unet.config.in_channels,
-            self.height_image,
-            self.width_image,
+            self.height_img,
+            self.width_img,
             torch.float16,
             self.pipe._execution_device,
             generator,
