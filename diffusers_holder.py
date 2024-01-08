@@ -586,7 +586,7 @@ class DiffusersHolder():
             
             # Write latents out and skip
             if i < idx_start:
-                list_latents_out.append(None)
+                list_latents_out.append(latents)
                 continue
 
             # expand the latents if we are doing classifier free guidance
