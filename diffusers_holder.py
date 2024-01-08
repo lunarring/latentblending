@@ -576,7 +576,11 @@ class DiffusersHolder():
         
         for i, t in enumerate(timesteps):
             # Set the right starting latents
-            if i == idx_start:
+            # Write latents out and skip
+            if i < idx_start:
+                list_latents_out.append(None)
+                continue
+            elif i == idx_start:
                 latents = latents_start.clone()
                 
             # Mix latents for crossfeeding
@@ -584,10 +588,6 @@ class DiffusersHolder():
                 latents_mixtarget = list_latents_mixing[i - 1].clone()
                 latents = interpolate_spherical(latents, latents_mixtarget, list_mixing_coeffs[i])
             
-            # Write latents out and skip
-            if i < idx_start:
-                list_latents_out.append(latents)
-                continue
 
             # expand the latents if we are doing classifier free guidance
             latent_model_input = torch.cat([latents] * 2) if self.pipe.do_classifier_free_guidance else latents
@@ -701,7 +701,7 @@ class DiffusersHolder():
                 list_latents_out.append(None)
                 continue
             # Set the right starting latents
-            if i == idx_start:
+            elif i == idx_start:
                 latents = latents_start.clone()
     
             # Mix latents for crossfeeding
