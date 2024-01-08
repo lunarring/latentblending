@@ -89,9 +89,9 @@ class LatentBlending():
         self.list_nmb_branches = None
 
         # Mixing parameters
-        self.branch1_crossfeed_power = 0.3
-        self.branch1_crossfeed_range = 0.3
-        self.branch1_crossfeed_decay = 0.99
+        self.branch1_crossfeed_power = 0.0
+        self.branch1_crossfeed_range = 0.0
+        self.branch1_crossfeed_decay = 0.0
 
         self.parental_crossfeed_power = 0.3
         self.parental_crossfeed_range = 0.6
@@ -101,7 +101,6 @@ class LatentBlending():
         self.multi_transition_img_first = None
         self.multi_transition_img_last = None
         self.dt_per_diff = 0
-        self.spatial_mask = None
         self.lpips = lpips.LPIPS(net='alex').cuda(self.device)
 
         self.set_prompt1("")
@@ -215,6 +214,8 @@ class LatentBlending():
             recycle_img1: Optional[bool] = False,
             recycle_img2: Optional[bool] = False,
             num_inference_steps: Optional[int] = 30,
+            list_idx_injection: Optional[int] = None, 
+            list_nmb_stems: Optional[int] = None,
             depth_strength: Optional[float] = 0.3,
             t_compute_max_allowed: Optional[float] = None,
             nmb_max_branches: Optional[int] = None,
@@ -248,6 +249,7 @@ class LatentBlending():
         # Sanity checks first
         assert self.text_embedding1 is not None, 'Set the first text embedding with .set_prompt1(...) before'
         assert self.text_embedding2 is not None, 'Set the second text embedding with .set_prompt2(...) before'
+        
 
         # Random seeds
         if fixed_seeds is not None:
@@ -260,6 +262,8 @@ class LatentBlending():
             self.seed2 = fixed_seeds[1]
 
         # Ensure correct num_inference_steps in holder
+        if 'turbo' in self.dh.pipe._name_or_path:
+            num_inference_steps = 4 #ideal results
         self.num_inference_steps = num_inference_steps
         self.dh.set_num_inference_steps(num_inference_steps)
 
@@ -281,11 +285,18 @@ class LatentBlending():
         self.tree_final_imgs = [self.dh.latent2image((self.tree_latents[0][-1])), self.dh.latent2image((self.tree_latents[-1][-1]))]
         self.tree_idx_injection = [0, 0]
 
-        # Hard-fix. Apply spatial mask only for list_latents2 but not for transition. WIP...
-        self.spatial_mask = None
-
         # Set up branching scheme (dependent on provided compute time)
-        list_idx_injection, list_nmb_stems = self.get_time_based_branching(depth_strength, t_compute_max_allowed, nmb_max_branches)
+        if 'turbo' in self.dh.pipe._name_or_path:
+            self.guidance_scale = 0.0
+            
+            self.parental_crossfeed_power = 1.0
+            self.parental_crossfeed_power_decay = 1.0
+            self.parental_crossfeed_range = 1.0
+            list_idx_injection = [2]
+            list_nmb_stems = [10]
+        else:
+            
+            list_idx_injection, list_nmb_stems = self.get_time_based_branching(depth_strength, t_compute_max_allowed, nmb_max_branches)
 
         # Run iteratively, starting with the longest trajectory.
         # Always inserting new branches where they are needed most according to image similarity
@@ -298,7 +309,7 @@ class LatentBlending():
                 self.set_guidance_mid_dampening(fract_mixing)
                 list_latents = self.compute_latents_mix(fract_mixing, b_parent1, b_parent2, idx_injection)
                 self.insert_into_tree(fract_mixing, idx_injection, list_latents)
-                # print(f"fract_mixing: {fract_mixing} idx_injection {idx_injection}")
+                # print(f"fract_mixing: {fract_mixing} idx_injection {idx_injection} bp1 {b_parent1} bp2 {b_parent2}")
 
         return self.tree_final_imgs
 
@@ -417,8 +428,10 @@ class LatentBlending():
                 results. Use this if you want to have controllable results independent
                 of your computer.
         """
-        idx_injection_base = int(round(self.num_inference_steps * depth_strength))
-        list_idx_injection = np.arange(idx_injection_base, self.num_inference_steps - 1, 3)
+        idx_injection_base = int(np.floor(self.num_inference_steps * depth_strength))
+        
+        steps = int(np.ceil(self.num_inference_steps/10))
+        list_idx_injection = np.arange(idx_injection_base, self.num_inference_steps, steps)
         list_nmb_stems = np.ones(len(list_idx_injection), dtype=np.int32)
         t_compute = 0
 
@@ -440,7 +453,7 @@ class LatentBlending():
             t_compute += 2 * self.num_inference_steps * self.dt_per_diff  # outer branches
             increase_done = False
             for s_idx in range(len(list_nmb_stems) - 1):
-                if list_nmb_stems[s_idx + 1] / list_nmb_stems[s_idx] >= 2:
+                if list_nmb_stems[s_idx + 1] / list_nmb_stems[s_idx] >= 1:
                     list_nmb_stems[s_idx] += 1
                     increase_done = True
                     break
@@ -471,15 +484,14 @@ class LatentBlending():
                 the index in terms of diffusion steps, where the next insertion will start.
         """
         # get_lpips_similarity
-        similarities = []
-        for i in range(len(self.tree_final_imgs) - 1):
-            similarities.append(self.get_lpips_similarity(self.tree_final_imgs[i], self.tree_final_imgs[i + 1]))
+        similarities = self.get_tree_similarities()
         b_closest1 = np.argmax(similarities)
         b_closest2 = b_closest1 + 1
         fract_closest1 = self.tree_fracts[b_closest1]
         fract_closest2 = self.tree_fracts[b_closest2]
+        fract_mixing = (fract_closest1 + fract_closest2) / 2
 
-        # Ensure that the parents are indeed older!
+        # Ensure that the parents are indeed older
         b_parent1 = b_closest1
         while True:
             if self.tree_idx_injection[b_parent1] < idx_injection:
@@ -492,7 +504,6 @@ class LatentBlending():
                 break
             else:
                 b_parent2 += 1
-        fract_mixing = (fract_closest1 + fract_closest2) / 2
         return fract_mixing, b_parent1, b_parent2
 
     def insert_into_tree(self, fract_mixing, idx_injection, list_latents):
@@ -507,10 +518,11 @@ class LatentBlending():
                 list of the latents to be inserted
         """
         b_parent1, b_parent2 = self.get_closest_idx(fract_mixing)
-        self.tree_latents.insert(b_parent1 + 1, list_latents)
-        self.tree_final_imgs.insert(b_parent1 + 1, self.dh.latent2image(list_latents[-1]))
-        self.tree_fracts.insert(b_parent1 + 1, fract_mixing)
-        self.tree_idx_injection.insert(b_parent1 + 1, idx_injection)
+        idx_tree = b_parent1 + 1
+        self.tree_latents.insert(idx_tree, list_latents)
+        self.tree_final_imgs.insert(idx_tree, self.dh.latent2image(list_latents[-1]))
+        self.tree_fracts.insert(idx_tree, fract_mixing)
+        self.tree_idx_injection.insert(idx_tree, idx_injection)
 
     def get_noise(self, seed):
         r"""
@@ -807,6 +819,12 @@ class LatentBlending():
         lploss = float(lploss[0][0][0][0])
         return lploss
 
+    def get_tree_similarities(self):
+        similarities = []
+        for i in range(len(self.tree_final_imgs) - 1):
+            similarities.append(self.get_lpips_similarity(self.tree_final_imgs[i], self.tree_final_imgs[i + 1]))
+        return similarities
+
     # Auxiliary functions
     def get_closest_idx(
             self,
@@ -832,7 +850,7 @@ class LatentBlending():
 
         return b_parent1, b_parent2
 
-
+#%%
 if __name__ == "__main__":
     
     # %% First let us spawn a stable diffusion holder. Uncomment your version of choice.
@@ -841,22 +859,16 @@ if __name__ == "__main__":
     from diffusers import AutoencoderTiny
     pipe = DiffusionPipeline.from_pretrained("stabilityai/sdxl-turbo", torch_dtype=torch.float16, variant="fp16")
     pipe.to("cuda")
-    # pipe.vae = AutoencoderTiny.from_pretrained('madebyollin/taesdxl', torch_device='cuda', torch_dtype=torch.float16)
-    # pipe.vae = pipe.vae.cuda()
+    pipe.vae = AutoencoderTiny.from_pretrained('madebyollin/taesdxl', torch_device='cuda', torch_dtype=torch.float16)
+    pipe.vae = pipe.vae.cuda()
 
     dh = DiffusersHolder(pipe)
     # %% Next let's set up all parameters
-    depth_strength = 0.5  # Specifies how deep (in terms of diffusion iterations the first branching happens)
-    t_compute_max_allowed = 5  # Determines the quality of the transition in terms of compute time you grant it
-    num_inference_steps = 4
     size_output = (512, 512)
-
-
     prompt1 = "underwater landscape, fish, und the sea, incredible detail, high resolution"
     prompt2 = "rendering of an alien planet, strange plants, strange creatures, surreal"
     negative_prompt = "blurry, ugly, pale"  # Optional
 
-    fp_movie = 'movie_example1.mp4'
     duration_transition = 12  # In seconds
 
     # Spawn latent blending
@@ -865,31 +877,24 @@ if __name__ == "__main__":
     lb.set_prompt2(prompt2)
     lb.set_dimensions(size_output)
     lb.set_negative_prompt(negative_prompt)
-    lb.set_guidance_scale(0)
     
-    lb.branch1_crossfeed_power = 0.0
-    lb.branch1_crossfeed_range = 0.6
-    lb.branch1_crossfeed_decay = 0.99
-    
-    lb.parental_crossfeed_power = 1.0
-    lb.parental_crossfeed_power_decay = 1.0
-    lb.parental_crossfeed_range = 1.0
 
     # Run latent blending
-    lb.run_transition(
-        depth_strength=depth_strength,
-        num_inference_steps=num_inference_steps,
-        t_compute_max_allowed=t_compute_max_allowed)
-
+    lb.run_transition(fixed_seeds=[420, 421])
 
     # Save movie
+    fp_movie = f'test.mp4'
     lb.write_movie_transition(fp_movie, duration_transition)
+    
+
 
     #%%
     
     """
-    checkout sizes
     checkout good tree for num inference steps
     checkout that good nmb inference step given
+    
+    timing1: dt_per_diff rename and fix (first time run is super slow)
+    timing2: measure time for decoding
     
     """
