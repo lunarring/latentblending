@@ -262,7 +262,7 @@ class DiffusersHolder():
 
         for i, t in enumerate(timesteps):
             # Set the right starting latents
-            elif i == idx_start:
+            if i == idx_start:
                 latents = latents_start.clone()
             # Mix latents
             if i > 0 and list_mixing_coeffs[i] > 0:
