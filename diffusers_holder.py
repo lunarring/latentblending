@@ -262,9 +262,6 @@ class DiffusersHolder():
 
         for i, t in enumerate(timesteps):
             # Set the right starting latents
-            if i < idx_start:
-                list_latents_out.append(None)
-                continue
             elif i == idx_start:
                 latents = latents_start.clone()
             # Mix latents
@@ -272,6 +269,9 @@ class DiffusersHolder():
                 latents_mixtarget = list_latents_mixing[i - 1].clone()
                 latents = interpolate_spherical(latents, latents_mixtarget, list_mixing_coeffs[i])
 
+            if i < idx_start:
+                list_latents_out.append(latents)
+                
             # expand the latents if we are doing classifier free guidance
             latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
             latent_model_input = self.pipe.scheduler.scale_model_input(latent_model_input, t)
