@@ -114,8 +114,6 @@ class DiffusersHolder():
 
     def get_noise(self, seed=420):
         
-        generator = torch.Generator(device=self.device).manual_seed(int(seed))
-        
         latents = self.pipe.prepare_latents(
             1,
             self.pipe.unet.config.in_channels,
@@ -123,7 +121,7 @@ class DiffusersHolder():
             self.width_img,
             torch.float16,
             self.pipe._execution_device,
-            generator,
+            torch.Generator(device=self.device).manual_seed(int(seed)),
             None,
         )
         
@@ -448,6 +446,7 @@ class DiffusersHolder():
         list_latents_mixing=None,
         mixing_coeffs=0.0,
         return_image: Optional[bool] = False,
+        seed=420,
         **kwargs,
     ):
         
@@ -478,6 +477,7 @@ class DiffusersHolder():
         clip_skip = None
         callback_on_step_end = None
         callback_on_step_end_tensor_inputs = ["latents"]
+        
 
         # 0. Default height and width to unet
         height = self.pipe.default_sample_size * self.pipe.vae_scale_factor
@@ -488,8 +488,6 @@ class DiffusersHolder():
         target_size = (height, width)
 
         # 1. (skipped) Check inputs. Raise error if not correct
-
-
         self.pipe._guidance_scale = guidance_scale
         self.pipe._guidance_rescale = guidance_rescale
         self.pipe._clip_skip = clip_skip
@@ -513,7 +511,8 @@ class DiffusersHolder():
         list_latents_out = []
         
         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
-        extra_step_kwargs = self.pipe.prepare_extra_step_kwargs(generator, eta)
+        
+        extra_step_kwargs = self.pipe.prepare_extra_step_kwargs(torch.Generator(device=self.device).manual_seed(int(0)), eta)
 
         # 7. Prepare added time ids & embeddings
         add_text_embeds = pooled_prompt_embeds
@@ -627,120 +626,7 @@ class DiffusersHolder():
             return self.latent2image(latents)
         else:
             return list_latents_out
-
         
-        
-    @torch.no_grad()
-    def run_diffusion_sd_xl_old(
-        self,
-        text_embeddings: list,
-        latents_start: torch.FloatTensor,
-        idx_start: int = 0,
-        list_latents_mixing=None,
-        mixing_coeffs=0.0,
-        return_image: Optional[bool] = False,
-        **kwargs,
-    ):
-        # 0. Default height and width to unet
-        original_size = (self.width_img, self.height_img)
-        crops_coords_top_left = (0, 0)
-        target_size = original_size
-        batch_size = 1
-        eta = 0.0
-        num_images_per_prompt = 1
-        cross_attention_kwargs = None
-        generator = torch.Generator(device=self.device)  # dummy generator
-        do_classifier_free_guidance = self.guidance_scale > 1.0
-    
-        # 1. Check inputs. Raise error if not correct & 2. Define call parameters
-        list_mixing_coeffs = self.prepare_mixing(mixing_coeffs, list_latents_mixing)
-    
-        # 3. Encode input prompt (already encoded outside bc of mixing, just split here)
-        prompt_embeds, negative_prompt_embeds, pooled_prompt_embeds, negative_pooled_prompt_embeds = text_embeddings
-    
-        # 4. Prepare timesteps
-        self.pipe.scheduler.set_timesteps(self.num_inference_steps, device=self.device)
-        timesteps = self.pipe.scheduler.timesteps
-    
-        # 5. Prepare latent variables
-        latents = latents_start.clone()
-        list_latents_out = []
-    
-        # 6. Prepare extra step kwargs. usedummy generator
-        extra_step_kwargs = self.pipe.prepare_extra_step_kwargs(generator, eta)  # dummy
-    
-        # 7. Prepare added time ids & embeddings
-        add_text_embeds = pooled_prompt_embeds
-        if self.pipe.text_encoder_2 is None:
-            text_encoder_projection_dim = int(pooled_prompt_embeds.shape[-1])
-        else:
-            text_encoder_projection_dim = self.pipe.text_encoder_2.config.projection_dim
-    
-        add_time_ids = self.pipe._get_add_time_ids(
-            original_size,
-            crops_coords_top_left,
-            target_size,
-            dtype=prompt_embeds.dtype,
-            text_encoder_projection_dim=text_encoder_projection_dim,
-        )
-    
-        negative_add_time_ids = add_time_ids
-    
-        prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
-        add_text_embeds = torch.cat([negative_pooled_prompt_embeds, add_text_embeds], dim=0)
-        add_time_ids = torch.cat([negative_add_time_ids, add_time_ids], dim=0)
-    
-        prompt_embeds = prompt_embeds.to(self.device)
-        add_text_embeds = add_text_embeds.to(self.device)
-        add_time_ids = add_time_ids.to(self.device).repeat(batch_size * num_images_per_prompt, 1)
-    
-        # 8. Denoising loop
-        for i, t in enumerate(timesteps):
-            # Write latents out and skip
-            if i < idx_start:
-                list_latents_out.append(None)
-                continue
-            # Set the right starting latents
-            elif i == idx_start:
-                latents = latents_start.clone()
-    
-            # Mix latents for crossfeeding
-            if i > 0 and list_mixing_coeffs[i] > 0:
-                latents_mixtarget = list_latents_mixing[i - 1].clone()
-                latents = interpolate_spherical(latents, latents_mixtarget, list_mixing_coeffs[i])
-    
-        
-            # expand the latents if we are doing classifier free guidance
-            latent_model_input = torch.cat([latents] * 2)# if do_classifier_free_guidance else latents
-            # Always scale latents
-            latent_model_input = self.pipe.scheduler.scale_model_input(latent_model_input, t)
-    
-            # predict the noise residual
-            added_cond_kwargs = {"text_embeds": add_text_embeds, "time_ids": add_time_ids}
-            noise_pred = self.pipe.unet(
-                latent_model_input,
-                t,
-                encoder_hidden_states=prompt_embeds,
-                cross_attention_kwargs=cross_attention_kwargs,
-                added_cond_kwargs=added_cond_kwargs,
-                return_dict=False,
-            )[0]
-    
-            # perform guidance
-            if do_classifier_free_guidance:
-                noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-                noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
-    
-            # compute the previous noisy sample x_t -> x_t-1
-            latents = self.pipe.scheduler.step(noise_pred, t, latents, **extra_step_kwargs, return_dict=False)[0]
-    
-            # Append latents
-            list_latents_out.append(latents.clone())
-    
-        if return_image:
-            return self.latent2image(latents)
-        else:
-            return list_latents_out
     
 
 #%%
@@ -757,17 +643,7 @@ if __name__ == "__main__":
     pipe.vae = AutoencoderTiny.from_pretrained('madebyollin/taesdxl', torch_device='cuda', torch_dtype=torch.float16)
     pipe.vae = pipe.vae.cuda()
     #%%
-    self = DiffusersHolder(pipe)
-    self.set_num_inference_steps(4)
-    prompt1 = "Photo of a colorful landscape with a blue sky with clouds"
-    text_embeddings1 = self.get_text_embedding(prompt1)
-    latents_start = self.get_noise(seed=420)
-    latents = self.run_diffusion_sd_xl(text_embeddings1, latents_start, idx_start=0, return_image=False)[-1]
-    image = self.latent2image(latents)
-    
-    
-    
-    xxxx
+
     # # xxx
     # self.set_dimensions((512, 512))
     # self.set_num_inference_steps(4)
@@ -785,6 +661,7 @@ if __name__ == "__main__":
     self.set_num_inference_steps(num_inference_steps)
     latents_start = self.get_noise()
     guidance_scale = 0
+    self.guidance_scale = 0
     
     #% get embeddings1
     prompt1 = "Photo of a colorful landscape with a blue sky with clouds"
@@ -797,11 +674,17 @@ if __name__ == "__main__":
     prompt_embeds2, negative_prompt_embeds2, pooled_prompt_embeds2, negative_pooled_prompt_embeds2 = text_embeddings2
     
     latents1 = self.run_diffusion_sd_xl(text_embeddings1, latents_start, idx_start=0, return_image=False)
-    latents2 = self.run_diffusion_sd_xl(text_embeddings2, latents_start, idx_start=0, return_image=False)
+    
+    img1 = self.run_diffusion_sd_xl(text_embeddings1, latents_start, idx_start=0, return_image=True)
+    img1B = self.run_diffusion_sd_xl(text_embeddings1, latents_start, idx_start=0, return_image=True)
     
     
-    # check if brings same image if restarted
-    img1_return = self.run_diffusion_sd_xl(text_embeddings1, latents1[idx_mix-1], idx_start=idx_start, return_image=True)
+    
+    # latents2 = self.run_diffusion_sd_xl(text_embeddings2, latents_start, idx_start=0, return_image=False)
+    
+    
+    # # check if brings same image if restarted
+    # img1_return = self.run_diffusion_sd_xl(text_embeddings1, latents1[idx_mix-1], idx_start=idx_start, return_image=True)
     
     # mix latents
     #%%
