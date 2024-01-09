@@ -562,25 +562,15 @@ class LatentBlending():
         self.dh.set_num_inference_steps(self.num_inference_steps)
         assert type(list_conditionings) is list, "list_conditionings need to be a list"
 
-        if self.dh.use_sd_xl:
-            text_embeddings = list_conditionings[0]
-            return self.dh.run_diffusion_sd_xl(
-                text_embeddings=text_embeddings,
-                latents_start=latents_start,
-                idx_start=idx_start,
-                list_latents_mixing=list_latents_mixing,
-                mixing_coeffs=mixing_coeffs,
-                return_image=return_image)
+        text_embeddings = list_conditionings[0]
+        return self.dh.run_diffusion_sd_xl(
+            text_embeddings=text_embeddings,
+            latents_start=latents_start,
+            idx_start=idx_start,
+            list_latents_mixing=list_latents_mixing,
+            mixing_coeffs=mixing_coeffs,
+            return_image=return_image)
 
-        else:
-            text_embeddings = list_conditionings[0]
-            return self.dh.run_diffusion_standard(
-                text_embeddings=text_embeddings,
-                latents_start=latents_start,
-                idx_start=idx_start,
-                list_latents_mixing=list_latents_mixing,
-                mixing_coeffs=mixing_coeffs,
-                return_image=return_image)
 
 
 
