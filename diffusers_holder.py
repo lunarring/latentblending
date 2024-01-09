@@ -93,7 +93,7 @@ class DiffusersHolder():
             self.negative_prompt = [self.negative_prompt[0]]
 
     def get_text_embedding(self, prompt):
-        do_classifier_free_guidance = self.guidance_scale > 1 and self.unet.config.time_cond_proj_dim is None
+        do_classifier_free_guidance = self.guidance_scale > 1 and self.pipe.unet.config.time_cond_proj_dim is None
         text_embeddings = self.pipe.encode_prompt(
             prompt=prompt,
             prompt_2=prompt,
