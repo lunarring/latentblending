@@ -1,18 +1,3 @@
-# Copyright 2022 Lunar Ring. All rights reserved.
-# Written by Johannes Stelzer, email stelzer@lunar-ring.ai twitter @j_stelzer
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import os
 import torch
 import numpy as np
@@ -20,16 +5,16 @@ import warnings
 import time
 from tqdm.auto import tqdm
 from PIL import Image
-from movie_util import MovieSaver
+from latentblending.movie_util import MovieSaver
 from typing import List, Optional
 import lpips
-from utils import interpolate_spherical, interpolate_linear, add_frames_linear_interp, yml_load, yml_save
+from latentblending.utils import interpolate_spherical, interpolate_linear, add_frames_linear_interp, yml_load, yml_save
 warnings.filterwarnings('ignore')
 torch.backends.cudnn.benchmark = False
 torch.set_grad_enabled(False)
 
 
-class LatentBlending():
+class BlendingEngine():
     def __init__(
             self,
             dh: None,
