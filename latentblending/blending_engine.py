@@ -9,8 +9,7 @@ from latentblending.movie_util import MovieSaver
 from typing import List, Optional
 import lpips
 import platform
-from latentblending.utils import interpolate_spherical, interpolate_linear,
- add_frames_linear_interp, yml_load, yml_save
+from latentblending.utils import interpolate_spherical, interpolate_linear, add_frames_linear_interp, yml_load, yml_save
 warnings.filterwarnings('ignore')
 torch.backends.cudnn.benchmark = False
 torch.set_grad_enabled(False)
