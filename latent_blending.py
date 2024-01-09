@@ -33,18 +33,11 @@ class LatentBlending():
     def __init__(
             self,
             dh: None,
-            guidance_scale: float = 4,
             guidance_scale_mid_damper: float = 0.5,
             mid_compression_scaler: float = 1.2):
         r"""
         Initializes the latent blending class.
         Args:
-            guidance_scale: float
-                Guidance scale as defined in [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598).
-                `guidance_scale` is defined as `w` of equation 2. of [Imagen
-                Paper](https://arxiv.org/pdf/2205.11487.pdf). Guidance scale is enabled by setting `guidance_scale >
-                1`. Higher guidance scale encourages to generate images that are closely linked to the text `prompt`,
-                usually at the expense of lower image quality.
             guidance_scale_mid_damper: float = 0.5
                 Reduces the guidance scale towards the middle of the transition.
                 A value of 0.5 would decrease the guidance_scale towards the middle linearly by 0.5.
@@ -76,36 +69,48 @@ class LatentBlending():
         self.tree_status = None
         self.tree_final_imgs = []
 
-        self.list_nmb_branches_prev = []
-        self.list_injection_idx_prev = []
         self.text_embedding1 = None
         self.text_embedding2 = None
         self.image1_lowres = None
         self.image2_lowres = None
         self.negative_prompt = None
-        self.num_inference_steps = self.dh.num_inference_steps
-        self.noise_level_upscaling = 20
-        self.list_injection_idx = None
-        self.list_nmb_branches = None
 
-        # Mixing parameters
-        self.branch1_crossfeed_power = 0.3
-        self.branch1_crossfeed_range = 0.3
-        self.branch1_crossfeed_decay = 0.99
-
-        self.parental_crossfeed_power = 0.3
-        self.parental_crossfeed_range = 0.6
-        self.parental_crossfeed_power_decay = 0.9
-
-        self.set_guidance_scale(guidance_scale)
+        self.set_guidance_scale()
         self.multi_transition_img_first = None
         self.multi_transition_img_last = None
-        self.dt_per_diff = 0
-        self.spatial_mask = None
+        self.dt_unet_step = 0
         self.lpips = lpips.LPIPS(net='alex').cuda(self.device)
 
         self.set_prompt1("")
         self.set_prompt2("")
+        
+        self.set_branch1_crossfeed()
+        self.set_parental_crossfeed()
+        
+        self.set_num_inference_steps()
+        self.benchmark_speed()
+        self.set_branching()
+        
+        
+        
+    def benchmark_speed(self):
+        """
+        Measures the time per diffusion step and for the vae decoding
+        """
+        
+        text_embeddings = self.dh.get_text_embedding("test")
+        latents_start = self.dh.get_noise(np.random.randint(111111))
+        # warmup
+        list_latents = self.dh.run_diffusion_sd_xl(text_embeddings=text_embeddings, latents_start=latents_start, return_image=False, idx_start=self.num_inference_steps-1)
+        # bench unet
+        t0 = time.time()
+        list_latents = self.dh.run_diffusion_sd_xl(text_embeddings=text_embeddings, latents_start=latents_start, return_image=False, idx_start=self.num_inference_steps-1)
+        self.dt_unet_step = time.time() - t0
+        
+        # bench vae
+        t0 = time.time()
+        img = self.dh.latent2image(list_latents[-1])
+        self.dt_vae = time.time() - t0
 
     def set_dimensions(self, size_output=None):
         r"""
@@ -115,12 +120,23 @@ class LatentBlending():
                 width x height
                 Note: the size will get automatically adjusted to be divisable by 32.
         """
+        if size_output is None:
+            if self.dh.is_sdxl_turbo:
+                size_output = (512, 512)
+            else:
+                size_output = (1024, 1024)
         self.dh.set_dimensions(size_output)
 
-    def set_guidance_scale(self, guidance_scale):
+    def set_guidance_scale(self, guidance_scale=None):
         r"""
         sets the guidance scale.
         """
+        if guidance_scale is None:
+            if self.dh.is_sdxl_turbo:
+                guidance_scale = 0.0
+            else:
+                guidance_scale = 4.0
+        
         self.guidance_scale_base = guidance_scale
         self.guidance_scale = guidance_scale
         self.dh.guidance_scale = guidance_scale
@@ -142,7 +158,7 @@ class LatentBlending():
         self.guidance_scale = guidance_scale_effective
         self.dh.guidance_scale = guidance_scale_effective
 
-    def set_branch1_crossfeed(self, crossfeed_power, crossfeed_range, crossfeed_decay):
+    def set_branch1_crossfeed(self, crossfeed_power=0, crossfeed_range=0, crossfeed_decay=0):
         r"""
         Sets the crossfeed parameters for the first branch to the last branch.
         Args:
@@ -157,7 +173,7 @@ class LatentBlending():
         self.branch1_crossfeed_range = np.clip(crossfeed_range, 0, 1)
         self.branch1_crossfeed_decay = np.clip(crossfeed_decay, 0, 1)
 
-    def set_parental_crossfeed(self, crossfeed_power, crossfeed_range, crossfeed_decay):
+    def set_parental_crossfeed(self, crossfeed_power=None, crossfeed_range=None, crossfeed_decay=None):
         r"""
         Sets the crossfeed parameters for all transition images (within the first and last branch).
         Args:
@@ -168,9 +184,22 @@ class LatentBlending():
             crossfeed_decay: float [0,1]
                 Sets decay for branch1_crossfeed_power. Lower values make the decay stronger across the range.
         """
+        
+        if self.dh.is_sdxl_turbo:
+            if crossfeed_power is None:
+                crossfeed_power = 1.0
+            if crossfeed_range is None:
+                crossfeed_range = 1.0
+            if crossfeed_decay is None:
+                crossfeed_decay = 1.0
+        else:
+            crossfeed_power = 0.3
+            crossfeed_range = 0.6
+            crossfeed_decay = 0.9
+            
         self.parental_crossfeed_power = np.clip(crossfeed_power, 0, 1)
         self.parental_crossfeed_range = np.clip(crossfeed_range, 0, 1)
-        self.parental_crossfeed_power_decay = np.clip(crossfeed_decay, 0, 1)
+        self.parental_crossfeed_decay = np.clip(crossfeed_decay, 0, 1)
 
     def set_prompt1(self, prompt: str):
         r"""
@@ -209,26 +238,21 @@ class LatentBlending():
             image: Image
         """
         self.image2_lowres = image
-
-    def run_transition(
-            self,
-            recycle_img1: Optional[bool] = False,
-            recycle_img2: Optional[bool] = False,
-            num_inference_steps: Optional[int] = 30,
-            depth_strength: Optional[float] = 0.3,
-            t_compute_max_allowed: Optional[float] = None,
-            nmb_max_branches: Optional[int] = None,
-            fixed_seeds: Optional[List[int]] = None):
-        r"""
-        Function for computing transitions.
-        Returns a list of transition images using spherical latent blending.
-        Args:
-            recycle_img1: Optional[bool]:
-                Don't recompute the latents for the first keyframe (purely prompt1). Saves compute.
-            recycle_img2: Optional[bool]:
-                Don't recompute the latents for the second keyframe (purely prompt2). Saves compute.
-            num_inference_steps:
-                Number of diffusion steps. Higher values will take more compute time.
+        
+    def set_num_inference_steps(self, num_inference_steps=None):
+        if self.dh.is_sdxl_turbo:
+            if num_inference_steps is None:
+                num_inference_steps = 4
+        else:
+            if num_inference_steps is None:
+                num_inference_steps = 30
+            
+        self.num_inference_steps = num_inference_steps
+        self.dh.set_num_inference_steps(num_inference_steps)
+        
+    def set_branching(self, depth_strength=None, t_compute_max_allowed=None, nmb_max_branches=None):
+        """
+        Sets the branching structure of the blending tree. Default arguments depend on pipe!
             depth_strength:
                 Determines how deep the first injection will happen.
                 Deeper injections will cause (unwanted) formation of new structures,
@@ -240,6 +264,45 @@ class LatentBlending():
                 Either provide t_compute_max_allowed or nmb_max_branches. The maximum number of branches to be computed. Higher values give better
                 results. Use this if you want to have controllable results independent
                 of your computer.
+        """
+        if self.dh.is_sdxl_turbo:
+            assert t_compute_max_allowed is None, "time-based branching not supported for SDXL Turbo"
+            if depth_strength is not None:
+                idx_inject = int(round(self.num_inference_steps*depth_strength))
+            else:
+                idx_inject = 2
+            if nmb_max_branches is None:
+                nmb_max_branches = 10
+                
+            self.list_idx_injection = [idx_inject]
+            self.list_nmb_stems = [nmb_max_branches]
+            
+        else:
+            if depth_strength is None:
+                depth_strength = 0.5
+            if t_compute_max_allowed is None and nmb_max_branches is None:
+                t_compute_max_allowed = 20
+            elif t_compute_max_allowed is not None and nmb_max_branches is not None:
+                raise ValueErorr("Either specify t_compute_max_allowed or nmb_max_branches")
+            
+            self.list_idx_injection, self.list_nmb_stems = self.get_time_based_branching(depth_strength, t_compute_max_allowed, nmb_max_branches)    
+
+    def run_transition(
+            self,
+            recycle_img1: Optional[bool] = False,
+            recycle_img2: Optional[bool] = False,
+            fixed_seeds: Optional[List[int]] = None):
+        r"""
+        Function for computing transitions.
+        Returns a list of transition images using spherical latent blending.
+        Args:
+            recycle_img1: Optional[bool]:
+                Don't recompute the latents for the first keyframe (purely prompt1). Saves compute.
+            recycle_img2: Optional[bool]:
+                Don't recompute the latents for the second keyframe (purely prompt2). Saves compute.
+            num_inference_steps:
+                Number of diffusion steps. Higher values will take more compute time.
+
             fixed_seeds: Optional[List[int)]:
                 You can supply two seeds that are used for the first and second keyframe (prompt1 and prompt2).
                 Otherwise random seeds will be taken.
@@ -248,6 +311,7 @@ class LatentBlending():
         # Sanity checks first
         assert self.text_embedding1 is not None, 'Set the first text embedding with .set_prompt1(...) before'
         assert self.text_embedding2 is not None, 'Set the second text embedding with .set_prompt2(...) before'
+        
 
         # Random seeds
         if fixed_seeds is not None:
@@ -259,10 +323,7 @@ class LatentBlending():
             self.seed1 = fixed_seeds[0]
             self.seed2 = fixed_seeds[1]
 
-        # Ensure correct num_inference_steps in holder
-        self.num_inference_steps = num_inference_steps
-        self.dh.set_num_inference_steps(num_inference_steps)
-
+        
         # Compute / Recycle first image
         if not recycle_img1 or len(self.tree_latents[0]) != self.num_inference_steps:
             list_latents1 = self.compute_latents1()
@@ -280,27 +341,26 @@ class LatentBlending():
         self.tree_fracts = [0.0, 1.0]
         self.tree_final_imgs = [self.dh.latent2image((self.tree_latents[0][-1])), self.dh.latent2image((self.tree_latents[-1][-1]))]
         self.tree_idx_injection = [0, 0]
+        self.tree_similarities = [self.get_tree_similarities]
 
-        # Hard-fix. Apply spatial mask only for list_latents2 but not for transition. WIP...
-        self.spatial_mask = None
-
-        # Set up branching scheme (dependent on provided compute time)
-        list_idx_injection, list_nmb_stems = self.get_time_based_branching(depth_strength, t_compute_max_allowed, nmb_max_branches)
 
         # Run iteratively, starting with the longest trajectory.
         # Always inserting new branches where they are needed most according to image similarity
-        for s_idx in tqdm(range(len(list_idx_injection))):
-            nmb_stems = list_nmb_stems[s_idx]
-            idx_injection = list_idx_injection[s_idx]
+        for s_idx in tqdm(range(len(self.list_idx_injection))):
+            nmb_stems = self.list_nmb_stems[s_idx]
+            idx_injection = self.list_idx_injection[s_idx]
 
             for i in range(nmb_stems):
                 fract_mixing, b_parent1, b_parent2 = self.get_mixing_parameters(idx_injection)
                 self.set_guidance_mid_dampening(fract_mixing)
                 list_latents = self.compute_latents_mix(fract_mixing, b_parent1, b_parent2, idx_injection)
                 self.insert_into_tree(fract_mixing, idx_injection, list_latents)
-                # print(f"fract_mixing: {fract_mixing} idx_injection {idx_injection}")
+                # print(f"fract_mixing: {fract_mixing} idx_injection {idx_injection} bp1 {b_parent1} bp2 {b_parent2}")
 
         return self.tree_final_imgs
+    
+
+        
 
     def compute_latents1(self, return_image=False):
         r"""
@@ -318,7 +378,7 @@ class LatentBlending():
             latents_start=latents_start,
             idx_start=0)
         t1 = time.time()
-        self.dt_per_diff = (t1 - t0) / self.num_inference_steps
+        self.dt_unet_step = (t1 - t0) / self.num_inference_steps
         self.tree_latents[0] = list_latents1
         if return_image:
             return self.dh.latent2image(list_latents1[-1])
@@ -388,7 +448,7 @@ class LatentBlending():
         mixing_coeffs = idx_injection * [self.parental_crossfeed_power]
         nmb_mixing = idx_mixing_stop - idx_injection
         if nmb_mixing > 0:
-            mixing_coeffs.extend(list(np.linspace(self.parental_crossfeed_power, self.parental_crossfeed_power * self.parental_crossfeed_power_decay, nmb_mixing)))
+            mixing_coeffs.extend(list(np.linspace(self.parental_crossfeed_power, self.parental_crossfeed_power * self.parental_crossfeed_decay, nmb_mixing)))
         mixing_coeffs.extend((self.num_inference_steps - len(mixing_coeffs)) * [0])
         latents_start = list_latents_parental_mix[idx_injection - 1]
         list_latents = self.run_diffusion(
@@ -417,8 +477,10 @@ class LatentBlending():
                 results. Use this if you want to have controllable results independent
                 of your computer.
         """
-        idx_injection_base = int(round(self.num_inference_steps * depth_strength))
-        list_idx_injection = np.arange(idx_injection_base, self.num_inference_steps - 1, 3)
+        idx_injection_base = int(np.floor(self.num_inference_steps * depth_strength))
+        
+        steps = int(np.ceil(self.num_inference_steps/10))
+        list_idx_injection = np.arange(idx_injection_base, self.num_inference_steps, steps)
         list_nmb_stems = np.ones(len(list_idx_injection), dtype=np.int32)
         t_compute = 0
 
@@ -436,11 +498,11 @@ class LatentBlending():
         while not stop_criterion_reached:
             list_compute_steps = self.num_inference_steps - list_idx_injection
             list_compute_steps *= list_nmb_stems
-            t_compute = np.sum(list_compute_steps) * self.dt_per_diff + 0.15 * np.sum(list_nmb_stems)
-            t_compute += 2 * self.num_inference_steps * self.dt_per_diff  # outer branches
+            t_compute = np.sum(list_compute_steps) * self.dt_unet_step + self.dt_vae * np.sum(list_nmb_stems)
+            t_compute += 2 * (self.num_inference_steps * self.dt_unet_step + self.dt_vae) # outer branches
             increase_done = False
             for s_idx in range(len(list_nmb_stems) - 1):
-                if list_nmb_stems[s_idx + 1] / list_nmb_stems[s_idx] >= 2:
+                if list_nmb_stems[s_idx + 1] / list_nmb_stems[s_idx] >= 1:
                     list_nmb_stems[s_idx] += 1
                     increase_done = True
                     break
@@ -471,15 +533,15 @@ class LatentBlending():
                 the index in terms of diffusion steps, where the next insertion will start.
         """
         # get_lpips_similarity
-        similarities = []
-        for i in range(len(self.tree_final_imgs) - 1):
-            similarities.append(self.get_lpips_similarity(self.tree_final_imgs[i], self.tree_final_imgs[i + 1]))
+        similarities = self.tree_similarities
+        # similarities = self.get_tree_similarities()
         b_closest1 = np.argmax(similarities)
         b_closest2 = b_closest1 + 1
         fract_closest1 = self.tree_fracts[b_closest1]
         fract_closest2 = self.tree_fracts[b_closest2]
+        fract_mixing = (fract_closest1 + fract_closest2) / 2
 
-        # Ensure that the parents are indeed older!
+        # Ensure that the parents are indeed older
         b_parent1 = b_closest1
         while True:
             if self.tree_idx_injection[b_parent1] < idx_injection:
@@ -492,7 +554,6 @@ class LatentBlending():
                 break
             else:
                 b_parent2 += 1
-        fract_mixing = (fract_closest1 + fract_closest2) / 2
         return fract_mixing, b_parent1, b_parent2
 
     def insert_into_tree(self, fract_mixing, idx_injection, list_latents):
@@ -506,11 +567,21 @@ class LatentBlending():
             list_latents: list
                 list of the latents to be inserted
         """
+        img_insert = self.dh.latent2image(list_latents[-1])
+        
         b_parent1, b_parent2 = self.get_closest_idx(fract_mixing)
-        self.tree_latents.insert(b_parent1 + 1, list_latents)
-        self.tree_final_imgs.insert(b_parent1 + 1, self.dh.latent2image(list_latents[-1]))
-        self.tree_fracts.insert(b_parent1 + 1, fract_mixing)
-        self.tree_idx_injection.insert(b_parent1 + 1, idx_injection)
+        left_sim = self.get_lpips_similarity(img_insert, self.tree_final_imgs[b_parent1])
+        right_sim = self.get_lpips_similarity(img_insert, self.tree_final_imgs[b_parent2])
+        idx_insert = b_parent1 + 1
+        self.tree_latents.insert(idx_insert, list_latents)
+        self.tree_final_imgs.insert(idx_insert, img_insert)
+        self.tree_fracts.insert(idx_insert, fract_mixing)
+        self.tree_idx_injection.insert(idx_insert, idx_injection)
+        
+        # update similarities
+        self.tree_similarities[b_parent1] = left_sim
+        self.tree_similarities.insert(idx_insert, right_sim)
+        
 
     def get_noise(self, seed):
         r"""
@@ -552,119 +623,29 @@ class LatentBlending():
         self.dh.set_num_inference_steps(self.num_inference_steps)
         assert type(list_conditionings) is list, "list_conditionings need to be a list"
 
-        if self.dh.use_sd_xl:
-            text_embeddings = list_conditionings[0]
-            return self.dh.run_diffusion_sd_xl(
-                text_embeddings=text_embeddings,
-                latents_start=latents_start,
-                idx_start=idx_start,
-                list_latents_mixing=list_latents_mixing,
-                mixing_coeffs=mixing_coeffs,
-                return_image=return_image)
+        text_embeddings = list_conditionings[0]
+        return self.dh.run_diffusion_sd_xl(
+            text_embeddings=text_embeddings,
+            latents_start=latents_start,
+            idx_start=idx_start,
+            list_latents_mixing=list_latents_mixing,
+            mixing_coeffs=mixing_coeffs,
+            return_image=return_image)
 
-        else:
-            text_embeddings = list_conditionings[0]
-            return self.dh.run_diffusion_standard(
-                text_embeddings=text_embeddings,
-                latents_start=latents_start,
-                idx_start=idx_start,
-                list_latents_mixing=list_latents_mixing,
-                mixing_coeffs=mixing_coeffs,
-                return_image=return_image)
 
-    def run_upscaling(
-            self,
-            dp_img: str,
-            depth_strength: float = 0.65,
-            num_inference_steps: int = 100,
-            nmb_max_branches_highres: int = 5,
-            nmb_max_branches_lowres: int = 6,
-            duration_single_segment=3,
-            fps=24,
-            fixed_seeds: Optional[List[int]] = None):
-        r"""
-        Runs upscaling with the x4 model. Requires that you run a transition before with a low-res model and save the results using write_imgs_transition.
 
-        Args:
-            dp_img: str
-                Path to the low-res transition path (as saved in write_imgs_transition)
-            depth_strength:
-                Determines how deep the first injection will happen.
-                Deeper injections will cause (unwanted) formation of new structures,
-                more shallow values will go into alpha-blendy land.
-            num_inference_steps:
-                Number of diffusion steps. Higher values will take more compute time.
-            nmb_max_branches_highres: int
-                Number of final branches of the upscaling transition pass. Note this is the number
-                of branches between each pair of low-res images.
-            nmb_max_branches_lowres: int
-                Number of input low-res images, subsampling all transition images written in the low-res pass.
-                Setting this number lower (e.g. 6) will decrease the compute time but not affect the results too much.
-            duration_single_segment: float
-                The duration of each high-res movie segment. You will have nmb_max_branches_lowres-1 segments in total.
-            fps: float
-                frames per second of movie
-            fixed_seeds: Optional[List[int)]:
-                You can supply two seeds that are used for the first and second keyframe (prompt1 and prompt2).
-                Otherwise random seeds will be taken.
-        """
-        fp_yml = os.path.join(dp_img, "lowres.yaml")
-        fp_movie = os.path.join(dp_img, "movie_highres.mp4")
-        ms = MovieSaver(fp_movie, fps=fps)
-        assert os.path.isfile(fp_yml), "lowres.yaml does not exist. did you forget run_upscaling_step1?"
-        dict_stuff = yml_load(fp_yml)
-
-        # load lowres images
-        nmb_images_lowres = dict_stuff['nmb_images']
-        prompt1 = dict_stuff['prompt1']
-        prompt2 = dict_stuff['prompt2']
-        idx_img_lowres = np.round(np.linspace(0, nmb_images_lowres - 1, nmb_max_branches_lowres)).astype(np.int32)
-        imgs_lowres = []
-        for i in idx_img_lowres:
-            fp_img_lowres = os.path.join(dp_img, f"lowres_img_{str(i).zfill(4)}.jpg")
-            assert os.path.isfile(fp_img_lowres), f"{fp_img_lowres} does not exist. did you forget run_upscaling_step1?"
-            imgs_lowres.append(Image.open(fp_img_lowres))
-
-        # set up upscaling
-        text_embeddingA = self.dh.get_text_embedding(prompt1)
-        text_embeddingB = self.dh.get_text_embedding(prompt2)
-        list_fract_mixing = np.linspace(0, 1, nmb_max_branches_lowres - 1)
-        for i in range(nmb_max_branches_lowres - 1):
-            print(f"Starting movie segment {i+1}/{nmb_max_branches_lowres-1}")
-            self.text_embedding1 = interpolate_linear(text_embeddingA, text_embeddingB, list_fract_mixing[i])
-            self.text_embedding2 = interpolate_linear(text_embeddingA, text_embeddingB, 1 - list_fract_mixing[i])
-            if i == 0:
-                recycle_img1 = False
-            else:
-                self.swap_forward()
-                recycle_img1 = True
-
-            self.set_image1(imgs_lowres[i])
-            self.set_image2(imgs_lowres[i + 1])
-
-            list_imgs = self.run_transition(
-                recycle_img1=recycle_img1,
-                recycle_img2=False,
-                num_inference_steps=num_inference_steps,
-                depth_strength=depth_strength,
-                nmb_max_branches=nmb_max_branches_highres)
-            list_imgs_interp = add_frames_linear_interp(list_imgs, fps, duration_single_segment)
-
-            # Save movie frame
-            for img in list_imgs_interp:
-                ms.write_frame(img)
-        ms.finalize()
 
     @torch.no_grad()
     def get_mixed_conditioning(self, fract_mixing):
-        if self.dh.use_sd_xl:
-            text_embeddings_mix = []
-            for i in range(len(self.text_embedding1)):
-                text_embeddings_mix.append(interpolate_linear(self.text_embedding1[i], self.text_embedding2[i], fract_mixing))
-            list_conditionings = [text_embeddings_mix]
-        else:
-            text_embeddings_mix = interpolate_linear(self.text_embedding1, self.text_embedding2, fract_mixing)
-            list_conditionings = [text_embeddings_mix]
+        text_embeddings_mix = []
+        for i in range(len(self.text_embedding1)):
+            if self.text_embedding1[i] is None:
+                mix = None
+            else:
+                mix = interpolate_linear(self.text_embedding1[i], self.text_embedding2[i], fract_mixing)
+            text_embeddings_mix.append(mix)
+        list_conditionings = [text_embeddings_mix]
+
         return list_conditionings
 
     @torch.no_grad()
@@ -733,7 +714,7 @@ class LatentBlending():
                      'num_inference_steps', 'depth_strength', 'guidance_scale',
                      'guidance_scale_mid_damper', 'mid_compression_scaler', 'negative_prompt',
                      'branch1_crossfeed_power', 'branch1_crossfeed_range', 'branch1_crossfeed_decay'
-                     'parental_crossfeed_power', 'parental_crossfeed_range', 'parental_crossfeed_power_decay']
+                     'parental_crossfeed_power', 'parental_crossfeed_range', 'parental_crossfeed_decay']
         for v in grab_vars:
             if hasattr(self, v):
                 if v == 'seed1' or v == 'seed2':
@@ -797,15 +778,21 @@ class LatentBlending():
         Used to determine the optimal point of insertion to create smooth transitions.
         High values indicate low similarity.
         """
-        tensorA = torch.from_numpy(imgA).float().cuda(self.device)
+        tensorA = torch.from_numpy(np.asarray(imgA)).float().cuda(self.device)
         tensorA = 2 * tensorA / 255.0 - 1
         tensorA = tensorA.permute([2, 0, 1]).unsqueeze(0)
-        tensorB = torch.from_numpy(imgB).float().cuda(self.device)
+        tensorB = torch.from_numpy(np.asarray(imgB)).float().cuda(self.device)
         tensorB = 2 * tensorB / 255.0 - 1
         tensorB = tensorB.permute([2, 0, 1]).unsqueeze(0)
         lploss = self.lpips(tensorA, tensorB)
         lploss = float(lploss[0][0][0][0])
         return lploss
+
+    def get_tree_similarities(self):
+        similarities = []
+        for i in range(len(self.tree_final_imgs) - 1):
+            similarities.append(self.get_lpips_similarity(self.tree_final_imgs[i], self.tree_final_imgs[i + 1]))
+        return similarities
 
     # Auxiliary functions
     def get_closest_idx(
@@ -831,3 +818,46 @@ class LatentBlending():
             b_parent1 = tmp
 
         return b_parent1, b_parent2
+
+#%%
+if __name__ == "__main__":
+    
+    # %% First let us spawn a stable diffusion holder. Uncomment your version of choice.
+    from diffusers_holder import DiffusersHolder
+    from diffusers import DiffusionPipeline
+    from diffusers import AutoencoderTiny
+    # pretrained_model_name_or_path = "stabilityai/stable-diffusion-xl-base-1.0"
+    pretrained_model_name_or_path = "stabilityai/sdxl-turbo"
+    
+    
+    pipe = DiffusionPipeline.from_pretrained(pretrained_model_name_or_path, torch_dtype=torch.float16, variant="fp16")
+    pipe.to("cuda")
+    pipe.vae = AutoencoderTiny.from_pretrained('madebyollin/taesdxl', torch_device='cuda', torch_dtype=torch.float16)
+    pipe.vae = pipe.vae.cuda()
+
+    dh = DiffusersHolder(pipe)
+    # %% Next let's set up all parameters
+    prompt1 = "photo of underwater landscape, fish, und the sea, incredible detail, high resolution"
+    prompt2 = "rendering of an alien planet, strange plants, strange creatures, surreal"
+    negative_prompt = "blurry, ugly, pale"  # Optional
+
+    duration_transition = 12  # In seconds
+
+    # Spawn latent blending
+    lb = LatentBlending(dh)
+    lb.set_prompt1(prompt1)
+    lb.set_prompt2(prompt2)
+    lb.set_negative_prompt(negative_prompt)
+
+    # Run latent blending
+    t0 = time.time()
+    lb.run_transition(fixed_seeds=[420, 421])
+    dt = time.time() - t0
+
+    # Save movie
+    fp_movie = f'test.mp4'
+    lb.write_movie_transition(fp_movie, duration_transition)
+    
+
+
+

@@ -262,7 +262,6 @@ def add_subtitles_to_video(
 
 
 
-
 class MovieReader():
     r"""
     Class to read in a movie.

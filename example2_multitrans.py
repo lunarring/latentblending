@@ -17,24 +17,20 @@ import torch
 import warnings
 from latent_blending import LatentBlending
 from diffusers_holder import DiffusersHolder
-from diffusers import DiffusionPipeline
+from diffusers import AutoPipelineForText2Image
 from movie_util import concatenate_movies
 torch.set_grad_enabled(False)
 torch.backends.cudnn.benchmark = False
 warnings.filterwarnings('ignore')
 
 # %% First let us spawn a stable diffusion holder. Uncomment your version of choice.
-pretrained_model_name_or_path = "stabilityai/stable-diffusion-xl-base-1.0"
-pipe = DiffusionPipeline.from_pretrained(pretrained_model_name_or_path, torch_dtype=torch.float16)
+pipe = AutoPipelineForText2Image.from_pretrained("stabilityai/sdxl-turbo", torch_dtype=torch.float16, variant="fp16")
 pipe.to('cuda')
 dh = DiffusersHolder(pipe)
 
 # %% Let's setup the multi transition
 fps = 30
-duration_single_trans = 20
-depth_strength = 0.25  # Specifies how deep (in terms of diffusion iterations the first branching happens)
-size_output = (1280, 768)
-num_inference_steps = 30
+duration_single_trans = 10
 
 # Specify a list of prompts below
 list_prompts = []
@@ -45,12 +41,8 @@ list_prompts.append("photo of a house, high detail")
 
 # You can optionally specify the seeds
 list_seeds = [95437579, 33259350, 956051013]
-t_compute_max_allowed = 20  # per segment
 fp_movie = 'movie_example2.mp4'
 lb = LatentBlending(dh)
-lb.set_dimensions(size_output)
-lb.dh.set_num_inference_steps(num_inference_steps)
-
 
 list_movie_parts = []
 for i in range(len(list_prompts) - 1):
@@ -69,8 +61,6 @@ for i in range(len(list_prompts) - 1):
     # Run latent blending
     lb.run_transition(
         recycle_img1=recycle_img1,
-        depth_strength=depth_strength,
-        t_compute_max_allowed=t_compute_max_allowed,
         fixed_seeds=fixed_seeds)
 
     # Save movie
