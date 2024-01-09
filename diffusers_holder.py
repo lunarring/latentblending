@@ -95,12 +95,12 @@ class DiffusersHolder():
     def get_text_embedding(self, prompt):
         text_embeddings = self.pipe.encode_prompt(
             prompt=prompt,
-            prompt_2=None,
+            prompt_2=prompt,
             device=self.pipe._execution_device,
             num_images_per_prompt=1,
             do_classifier_free_guidance=self.pipe.do_classifier_free_guidance,
             negative_prompt=self.negative_prompt,
-            negative_prompt_2=None,
+            negative_prompt_2=self.negative_prompt,
             prompt_embeds=None,
             negative_prompt_embeds=None,
             pooled_prompt_embeds=None,
