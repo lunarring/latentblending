@@ -584,99 +584,19 @@ class LatentBlending():
                 mixing_coeffs=mixing_coeffs,
                 return_image=return_image)
 
-    def run_upscaling(
-            self,
-            dp_img: str,
-            depth_strength: float = 0.65,
-            num_inference_steps: int = 100,
-            nmb_max_branches_highres: int = 5,
-            nmb_max_branches_lowres: int = 6,
-            duration_single_segment=3,
-            fps=24,
-            fixed_seeds: Optional[List[int]] = None):
-        r"""
-        Runs upscaling with the x4 model. Requires that you run a transition before with a low-res model and save the results using write_imgs_transition.
 
-        Args:
-            dp_img: str
-                Path to the low-res transition path (as saved in write_imgs_transition)
-            depth_strength:
-                Determines how deep the first injection will happen.
-                Deeper injections will cause (unwanted) formation of new structures,
-                more shallow values will go into alpha-blendy land.
-            num_inference_steps:
-                Number of diffusion steps. Higher values will take more compute time.
-            nmb_max_branches_highres: int
-                Number of final branches of the upscaling transition pass. Note this is the number
-                of branches between each pair of low-res images.
-            nmb_max_branches_lowres: int
-                Number of input low-res images, subsampling all transition images written in the low-res pass.
-                Setting this number lower (e.g. 6) will decrease the compute time but not affect the results too much.
-            duration_single_segment: float
-                The duration of each high-res movie segment. You will have nmb_max_branches_lowres-1 segments in total.
-            fps: float
-                frames per second of movie
-            fixed_seeds: Optional[List[int)]:
-                You can supply two seeds that are used for the first and second keyframe (prompt1 and prompt2).
-                Otherwise random seeds will be taken.
-        """
-        fp_yml = os.path.join(dp_img, "lowres.yaml")
-        fp_movie = os.path.join(dp_img, "movie_highres.mp4")
-        ms = MovieSaver(fp_movie, fps=fps)
-        assert os.path.isfile(fp_yml), "lowres.yaml does not exist. did you forget run_upscaling_step1?"
-        dict_stuff = yml_load(fp_yml)
-
-        # load lowres images
-        nmb_images_lowres = dict_stuff['nmb_images']
-        prompt1 = dict_stuff['prompt1']
-        prompt2 = dict_stuff['prompt2']
-        idx_img_lowres = np.round(np.linspace(0, nmb_images_lowres - 1, nmb_max_branches_lowres)).astype(np.int32)
-        imgs_lowres = []
-        for i in idx_img_lowres:
-            fp_img_lowres = os.path.join(dp_img, f"lowres_img_{str(i).zfill(4)}.jpg")
-            assert os.path.isfile(fp_img_lowres), f"{fp_img_lowres} does not exist. did you forget run_upscaling_step1?"
-            imgs_lowres.append(Image.open(fp_img_lowres))
-
-        # set up upscaling
-        text_embeddingA = self.dh.get_text_embedding(prompt1)
-        text_embeddingB = self.dh.get_text_embedding(prompt2)
-        list_fract_mixing = np.linspace(0, 1, nmb_max_branches_lowres - 1)
-        for i in range(nmb_max_branches_lowres - 1):
-            print(f"Starting movie segment {i+1}/{nmb_max_branches_lowres-1}")
-            self.text_embedding1 = interpolate_linear(text_embeddingA, text_embeddingB, list_fract_mixing[i])
-            self.text_embedding2 = interpolate_linear(text_embeddingA, text_embeddingB, 1 - list_fract_mixing[i])
-            if i == 0:
-                recycle_img1 = False
-            else:
-                self.swap_forward()
-                recycle_img1 = True
-
-            self.set_image1(imgs_lowres[i])
-            self.set_image2(imgs_lowres[i + 1])
-
-            list_imgs = self.run_transition(
-                recycle_img1=recycle_img1,
-                recycle_img2=False,
-                num_inference_steps=num_inference_steps,
-                depth_strength=depth_strength,
-                nmb_max_branches=nmb_max_branches_highres)
-            list_imgs_interp = add_frames_linear_interp(list_imgs, fps, duration_single_segment)
-
-            # Save movie frame
-            for img in list_imgs_interp:
-                ms.write_frame(img)
-        ms.finalize()
 
     @torch.no_grad()
     def get_mixed_conditioning(self, fract_mixing):
-        if self.dh.use_sd_xl:
-            text_embeddings_mix = []
-            for i in range(len(self.text_embedding1)):
-                text_embeddings_mix.append(interpolate_linear(self.text_embedding1[i], self.text_embedding2[i], fract_mixing))
-            list_conditionings = [text_embeddings_mix]
-        else:
-            text_embeddings_mix = interpolate_linear(self.text_embedding1, self.text_embedding2, fract_mixing)
-            list_conditionings = [text_embeddings_mix]
+        text_embeddings_mix = []
+        for i in range(len(self.text_embedding1)):
+            if self.text_embedding1[i] is None:
+                mix = None
+            else:
+                mix = interpolate_linear(self.text_embedding1[i], self.text_embedding2[i], fract_mixing)
+            text_embeddings_mix.append(mix)
+        list_conditionings = [text_embeddings_mix]
+
         return list_conditionings
 
     @torch.no_grad()
@@ -857,22 +777,30 @@ if __name__ == "__main__":
     from diffusers_holder import DiffusersHolder
     from diffusers import DiffusionPipeline
     from diffusers import AutoencoderTiny
-    pipe = DiffusionPipeline.from_pretrained("stabilityai/sdxl-turbo", torch_dtype=torch.float16, variant="fp16")
+    # pretrained_model_name_or_path = "stabilityai/stable-diffusion-xl-base-1.0"
+    pretrained_model_name_or_path = "stabilityai/sdxl-turbo"
+    
+    
+    pipe = DiffusionPipeline.from_pretrained(pretrained_model_name_or_path, torch_dtype=torch.float16, variant="fp16")
     pipe.to("cuda")
-    pipe.vae = AutoencoderTiny.from_pretrained('madebyollin/taesdxl', torch_device='cuda', torch_dtype=torch.float16)
-    pipe.vae = pipe.vae.cuda()
+    # pipe.vae = AutoencoderTiny.from_pretrained('madebyollin/taesdxl', torch_device='cuda', torch_dtype=torch.float16)
+    # pipe.vae = pipe.vae.cuda()
 
     dh = DiffusersHolder(pipe)
     # %% Next let's set up all parameters
     size_output = (512, 512)
-    prompt1 = "underwater landscape, fish, und the sea, incredible detail, high resolution"
+    # size_output = (1024, 1024)
+    prompt1 = "photo of underwater landscape, fish, und the sea, incredible detail, high resolution"
     prompt2 = "rendering of an alien planet, strange plants, strange creatures, surreal"
     negative_prompt = "blurry, ugly, pale"  # Optional
+
 
     duration_transition = 12  # In seconds
 
     # Spawn latent blending
     lb = LatentBlending(dh)
+    # lb.dh.set_num_inference_steps(num_inference_steps)
+    lb.set_guidance_scale(0)
     lb.set_prompt1(prompt1)
     lb.set_prompt2(prompt2)
     lb.set_dimensions(size_output)
@@ -880,7 +808,7 @@ if __name__ == "__main__":
     
 
     # Run latent blending
-    lb.run_transition(fixed_seeds=[420, 421])
+    lb.run_transition(fixed_seeds=[420, 421], t_compute_max_allowed=15)
 
     # Save movie
     fp_movie = f'test.mp4'
@@ -889,12 +817,3 @@ if __name__ == "__main__":
 
 
     #%%
-    
-    """
-    checkout good tree for num inference steps
-    checkout that good nmb inference step given
-    
-    timing1: dt_per_diff rename and fix (first time run is super slow)
-    timing2: measure time for decoding
-    
-    """

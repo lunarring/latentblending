@@ -780,8 +780,8 @@ class DiffusersHolder():
 if __name__ == "__main__":
     from PIL import Image
     from diffusers import AutoencoderTiny
-    pretrained_model_name_or_path = "stabilityai/stable-diffusion-xl-base-1.0"
-    # pretrained_model_name_or_path = "stabilityai/sdxl-turbo"
+    # pretrained_model_name_or_path = "stabilityai/stable-diffusion-xl-base-1.0"
+    pretrained_model_name_or_path = "stabilityai/sdxl-turbo"
     pipe = DiffusionPipeline.from_pretrained(pretrained_model_name_or_path, torch_dtype=torch.float16, variant="fp16")
     pipe.to("cuda")
         #%
@@ -792,13 +792,13 @@ if __name__ == "__main__":
     self = DiffusersHolder(pipe)
     prompt1 = "photo of underwater landscape, fish, und the sea, incredible detail, high resolution"
     negative_prompt = "blurry, ugly, pale" 
-    num_inference_steps = 30
-    guidance_scale = 4
+    num_inference_steps = 4
+    guidance_scale = 0
     
     self.set_num_inference_steps(num_inference_steps)
     self.guidance_scale = guidance_scale
     
-    prefix='full'
+    prefix='turbo'
     for i in range(10):
         self.set_negative_prompt(negative_prompt)
         
@@ -809,7 +809,7 @@ if __name__ == "__main__":
     
         # img_refx = self.pipe(prompt=prompt1, negative_prompt=negative_prompt, num_inference_steps=num_inference_steps, guidance_scale=guidance_scale)[0]
         
-        img_refx = self.run_diffusion_sd_xl_resanity(text_embeddings=text_embeddings, latents_start=latents_start, return_image=True)
+        img_refx = self.run_diffusion_sd_xl(text_embeddings=text_embeddings, latents_start=latents_start, return_image=True)
         
         dt_ref = time.time() - t0
         img_refx.save(f"x_{prefix}_{i}.jpg")
@@ -830,11 +830,7 @@ if __name__ == "__main__":
     # dt_dh = time.time() - t0
     
     
-    """
-    sth bad in call
-    sth bad in cond
-    sth bad in noise
-    """
+
     
     # xxxx
     # #%%
