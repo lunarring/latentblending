@@ -17,9 +17,8 @@ import torch
 import warnings
 from latent_blending import LatentBlending
 from diffusers_holder import DiffusersHolder
-from diffusers import DiffusionPipeline
-
 from diffusers import AutoPipelineForText2Image
+
 warnings.filterwarnings('ignore')
 torch.set_grad_enabled(False)
 torch.backends.cudnn.benchmark = False
