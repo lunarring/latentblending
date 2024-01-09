@@ -262,7 +262,7 @@ class LatentBlending():
             self.seed2 = fixed_seeds[1]
 
         # Ensure correct num_inference_steps in holder
-        if 'turbo' in self.dh.pipe._name_or_path:
+        if self.dh.is_sdxl_turbo:
             num_inference_steps = 4 #ideal results
         self.num_inference_steps = num_inference_steps
         self.dh.set_num_inference_steps(num_inference_steps)
@@ -286,16 +286,14 @@ class LatentBlending():
         self.tree_idx_injection = [0, 0]
 
         # Set up branching scheme (dependent on provided compute time)
-        if 'turbo' in self.dh.pipe._name_or_path:
+        if self.dh.is_sdxl_turbo:
             self.guidance_scale = 0.0
-            
             self.parental_crossfeed_power = 1.0
             self.parental_crossfeed_power_decay = 1.0
             self.parental_crossfeed_range = 1.0
             list_idx_injection = [2]
             list_nmb_stems = [10]
         else:
-            
             list_idx_injection, list_nmb_stems = self.get_time_based_branching(depth_strength, t_compute_max_allowed, nmb_max_branches)
 
         # Run iteratively, starting with the longest trajectory.
