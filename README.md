@@ -3,6 +3,10 @@
 Latent blending enables video transitions with incredible smoothness between prompts, computed within seconds. Powered by [stable diffusion XL](https://stability.ai/stable-diffusion), this method involves specific mixing of intermediate latent representations to create a seamless transition – with users having the option to fully customize the transition directly in high-resolution. The new version also supports SDXL Turbo, allowing to generate transitions faster than they are typically played back!
 
 ```python
+from diffusers import AutoPipelineForText2Image
+from latentblending.blending_engine import BlendingEngine
+from latentblending.diffusers_holder import DiffusersHolder
+
 pipe = AutoPipelineForText2Image.from_pretrained("stabilityai/sdxl-turbo", torch_dtype=torch.float16, variant="fp16").to("cuda")
 dh = DiffusersHolder(pipe)
 be = BlendingEngine(dh)
