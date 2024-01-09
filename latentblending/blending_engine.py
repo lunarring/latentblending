@@ -8,7 +8,9 @@ from PIL import Image
 from latentblending.movie_util import MovieSaver
 from typing import List, Optional
 import lpips
-from latentblending.utils import interpolate_spherical, interpolate_linear, add_frames_linear_interp, yml_load, yml_save
+import platform
+from latentblending.utils import interpolate_spherical, interpolate_linear,
+ add_frames_linear_interp, yml_load, yml_save
 warnings.filterwarnings('ignore')
 torch.backends.cudnn.benchmark = False
 torch.set_grad_enabled(False)
@@ -64,7 +66,10 @@ class BlendingEngine():
         self.multi_transition_img_first = None
         self.multi_transition_img_last = None
         self.dt_unet_step = 0
-        self.lpips = lpips.LPIPS(net='alex').cuda(self.device)
+        if platform.system() == "Darwin":
+            self.lpips = lpips.LPIPS(net='alex')
+        else:
+            self.lpips = lpips.LPIPS(net='alex').cuda(self.device)
 
         self.set_prompt1("")
         self.set_prompt2("")
