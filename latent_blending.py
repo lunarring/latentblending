@@ -33,18 +33,11 @@ class LatentBlending():
     def __init__(
             self,
             dh: None,
-            guidance_scale: float = 4,
             guidance_scale_mid_damper: float = 0.5,
             mid_compression_scaler: float = 1.2):
         r"""
         Initializes the latent blending class.
         Args:
-            guidance_scale: float
-                Guidance scale as defined in [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598).
-                `guidance_scale` is defined as `w` of equation 2. of [Imagen
-                Paper](https://arxiv.org/pdf/2205.11487.pdf). Guidance scale is enabled by setting `guidance_scale >
-                1`. Higher guidance scale encourages to generate images that are closely linked to the text `prompt`,
-                usually at the expense of lower image quality.
             guidance_scale_mid_damper: float = 0.5
                 Reduces the guidance scale towards the middle of the transition.
                 A value of 0.5 would decrease the guidance_scale towards the middle linearly by 0.5.
@@ -82,16 +75,7 @@ class LatentBlending():
         self.image2_lowres = None
         self.negative_prompt = None
 
-        # Mixing parameters
-        self.branch1_crossfeed_power = 0.0
-        self.branch1_crossfeed_range = 0.0
-        self.branch1_crossfeed_decay = 0.0
-
-        self.parental_crossfeed_power = 0.3
-        self.parental_crossfeed_range = 0.6
-        self.parental_crossfeed_power_decay = 0.9
-
-        self.set_guidance_scale(guidance_scale)
+        self.set_guidance_scale()
         self.multi_transition_img_first = None
         self.multi_transition_img_last = None
         self.dt_unet_step = 0
@@ -100,9 +84,14 @@ class LatentBlending():
         self.set_prompt1("")
         self.set_prompt2("")
         
+        self.set_branch1_crossfeed()
+        self.set_parental_crossfeed()
+        
         self.set_num_inference_steps()
         self.benchmark_speed()
         self.set_branching()
+        
+        
         
     def benchmark_speed(self):
         """
@@ -131,12 +120,23 @@ class LatentBlending():
                 width x height
                 Note: the size will get automatically adjusted to be divisable by 32.
         """
+        if size_output is None:
+            if self.dh.is_sdxl_turbo:
+                size_output = (512, 512)
+            else:
+                size_output = (1024, 1024)
         self.dh.set_dimensions(size_output)
 
-    def set_guidance_scale(self, guidance_scale):
+    def set_guidance_scale(self, guidance_scale=None):
         r"""
         sets the guidance scale.
         """
+        if guidance_scale is None:
+            if self.dh.is_sdxl_turbo:
+                guidance_scale = 0.0
+            else:
+                guidance_scale = 4.0
+        
         self.guidance_scale_base = guidance_scale
         self.guidance_scale = guidance_scale
         self.dh.guidance_scale = guidance_scale
@@ -158,7 +158,7 @@ class LatentBlending():
         self.guidance_scale = guidance_scale_effective
         self.dh.guidance_scale = guidance_scale_effective
 
-    def set_branch1_crossfeed(self, crossfeed_power, crossfeed_range, crossfeed_decay):
+    def set_branch1_crossfeed(self, crossfeed_power=0, crossfeed_range=0, crossfeed_decay=0):
         r"""
         Sets the crossfeed parameters for the first branch to the last branch.
         Args:
@@ -173,7 +173,7 @@ class LatentBlending():
         self.branch1_crossfeed_range = np.clip(crossfeed_range, 0, 1)
         self.branch1_crossfeed_decay = np.clip(crossfeed_decay, 0, 1)
 
-    def set_parental_crossfeed(self, crossfeed_power, crossfeed_range, crossfeed_decay):
+    def set_parental_crossfeed(self, crossfeed_power=None, crossfeed_range=None, crossfeed_decay=None):
         r"""
         Sets the crossfeed parameters for all transition images (within the first and last branch).
         Args:
@@ -184,9 +184,22 @@ class LatentBlending():
             crossfeed_decay: float [0,1]
                 Sets decay for branch1_crossfeed_power. Lower values make the decay stronger across the range.
         """
+        
+        if self.dh.is_sdxl_turbo:
+            if crossfeed_power is None:
+                crossfeed_power = 1.0
+            if crossfeed_range is None:
+                crossfeed_range = 1.0
+            if crossfeed_decay is None:
+                crossfeed_decay = 1.0
+        else:
+            crossfeed_power = 0.3
+            crossfeed_range = 0.6
+            crossfeed_decay = 0.9
+            
         self.parental_crossfeed_power = np.clip(crossfeed_power, 0, 1)
         self.parental_crossfeed_range = np.clip(crossfeed_range, 0, 1)
-        self.parental_crossfeed_power_decay = np.clip(crossfeed_decay, 0, 1)
+        self.parental_crossfeed_decay = np.clip(crossfeed_decay, 0, 1)
 
     def set_prompt1(self, prompt: str):
         r"""
@@ -329,13 +342,6 @@ class LatentBlending():
         self.tree_final_imgs = [self.dh.latent2image((self.tree_latents[0][-1])), self.dh.latent2image((self.tree_latents[-1][-1]))]
         self.tree_idx_injection = [0, 0]
 
-        # Set up branching scheme (dependent on provided compute time)
-        if self.dh.is_sdxl_turbo:
-            self.guidance_scale = 0.0
-            self.parental_crossfeed_power = 1.0
-            self.parental_crossfeed_power_decay = 1.0
-            self.parental_crossfeed_range = 1.0
-            
 
         # Run iteratively, starting with the longest trajectory.
         # Always inserting new branches where they are needed most according to image similarity
@@ -441,7 +447,7 @@ class LatentBlending():
         mixing_coeffs = idx_injection * [self.parental_crossfeed_power]
         nmb_mixing = idx_mixing_stop - idx_injection
         if nmb_mixing > 0:
-            mixing_coeffs.extend(list(np.linspace(self.parental_crossfeed_power, self.parental_crossfeed_power * self.parental_crossfeed_power_decay, nmb_mixing)))
+            mixing_coeffs.extend(list(np.linspace(self.parental_crossfeed_power, self.parental_crossfeed_power * self.parental_crossfeed_decay, nmb_mixing)))
         mixing_coeffs.extend((self.num_inference_steps - len(mixing_coeffs)) * [0])
         latents_start = list_latents_parental_mix[idx_injection - 1]
         list_latents = self.run_diffusion(
@@ -697,7 +703,7 @@ class LatentBlending():
                      'num_inference_steps', 'depth_strength', 'guidance_scale',
                      'guidance_scale_mid_damper', 'mid_compression_scaler', 'negative_prompt',
                      'branch1_crossfeed_power', 'branch1_crossfeed_range', 'branch1_crossfeed_decay'
-                     'parental_crossfeed_power', 'parental_crossfeed_range', 'parental_crossfeed_power_decay']
+                     'parental_crossfeed_power', 'parental_crossfeed_range', 'parental_crossfeed_decay']
         for v in grab_vars:
             if hasattr(self, v):
                 if v == 'seed1' or v == 'seed2':
@@ -809,8 +815,8 @@ if __name__ == "__main__":
     from diffusers_holder import DiffusersHolder
     from diffusers import DiffusionPipeline
     from diffusers import AutoencoderTiny
-    pretrained_model_name_or_path = "stabilityai/stable-diffusion-xl-base-1.0"
-    # pretrained_model_name_or_path = "stabilityai/sdxl-turbo"
+    # pretrained_model_name_or_path = "stabilityai/stable-diffusion-xl-base-1.0"
+    pretrained_model_name_or_path = "stabilityai/sdxl-turbo"
     
     
     pipe = DiffusionPipeline.from_pretrained(pretrained_model_name_or_path, torch_dtype=torch.float16, variant="fp16")
@@ -820,8 +826,6 @@ if __name__ == "__main__":
 
     dh = DiffusersHolder(pipe)
     # %% Next let's set up all parameters
-    # size_output = (512, 512)
-    size_output = (1024, 1024)
     prompt1 = "photo of underwater landscape, fish, und the sea, incredible detail, high resolution"
     prompt2 = "rendering of an alien planet, strange plants, strange creatures, surreal"
     negative_prompt = "blurry, ugly, pale"  # Optional
@@ -831,11 +835,8 @@ if __name__ == "__main__":
 
     # Spawn latent blending
     lb = LatentBlending(dh)
-    # lb.dh.set_num_inference_steps(num_inference_steps)
-    lb.set_guidance_scale(0)
     lb.set_prompt1(prompt1)
     lb.set_prompt2(prompt2)
-    lb.set_dimensions(size_output)
     lb.set_negative_prompt(negative_prompt)
 
     # Run latent blending
