@@ -415,7 +415,7 @@ if __name__ == "__main__":
     
         # img_refx = self.pipe(prompt=prompt1, negative_prompt=negative_prompt, num_inference_steps=num_inference_steps, guidance_scale=guidance_scale)[0]
         
-        img_refx = self.run_diffusion_sd_xl(text_embeddings=text_embeddings, latents_start=latents_start, return_image=True)
+        img_refx = self.run_diffusion_sd_xl(text_embeddings=text_embeddings, latents_start=latents_start, return_image=False)
         
         dt_ref = time.time() - t0
         img_refx.save(f"x_{prefix}_{i}.jpg")
