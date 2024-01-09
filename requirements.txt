@@ -4,3 +4,4 @@ ffmpeg-python
 diffusers["torch"]==0.23.0
 transformers==4.35.2
 pytest
+accelerate
