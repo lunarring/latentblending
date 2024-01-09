@@ -3,7 +3,7 @@ import numpy as np
 import warnings
 
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-from utils import interpolate_spherical
+from latentblending.utils import interpolate_spherical
 from diffusers import DiffusionPipeline, StableDiffusionControlNetPipeline, ControlNetModel
 from diffusers.models.attention_processor import (
     AttnProcessor2_0,

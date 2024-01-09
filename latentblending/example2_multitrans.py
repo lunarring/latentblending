@@ -1,21 +1,6 @@
-# Copyright 2022 Lunar Ring. All rights reserved.
-# Written by Johannes Stelzer, email stelzer@lunar-ring.ai twitter @j_stelzer
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import torch
 import warnings
-from latent_blending import LatentBlending
+from blending_engine import BlendingEngine
 from diffusers_holder import DiffusersHolder
 from diffusers import AutoPipelineForText2Image
 from movie_util import concatenate_movies
@@ -42,7 +27,7 @@ list_prompts.append("photo of a house, high detail")
 # You can optionally specify the seeds
 list_seeds = [95437579, 33259350, 956051013]
 fp_movie = 'movie_example2.mp4'
-lb = LatentBlending(dh)
+lb = BlendingEngine(dh)
 
 list_movie_parts = []
 for i in range(len(list_prompts) - 1):

@@ -1,6 +1,6 @@
 import torch
 import warnings
-from latent_blending import LatentBlending
+from blending_engine import BlendingEngine
 from diffusers_holder import DiffusersHolder
 from diffusers import AutoPipelineForText2Image
 
