@@ -341,6 +341,7 @@ class LatentBlending():
         self.tree_fracts = [0.0, 1.0]
         self.tree_final_imgs = [self.dh.latent2image((self.tree_latents[0][-1])), self.dh.latent2image((self.tree_latents[-1][-1]))]
         self.tree_idx_injection = [0, 0]
+        self.tree_similarities = [self.get_tree_similarities]
 
 
         # Run iteratively, starting with the longest trajectory.
@@ -532,7 +533,8 @@ class LatentBlending():
                 the index in terms of diffusion steps, where the next insertion will start.
         """
         # get_lpips_similarity
-        similarities = self.get_tree_similarities()
+        similarities = self.tree_similarities
+        # similarities = self.get_tree_similarities()
         b_closest1 = np.argmax(similarities)
         b_closest2 = b_closest1 + 1
         fract_closest1 = self.tree_fracts[b_closest1]
@@ -565,12 +567,21 @@ class LatentBlending():
             list_latents: list
                 list of the latents to be inserted
         """
+        img_insert = self.dh.latent2image(list_latents[-1])
+        
         b_parent1, b_parent2 = self.get_closest_idx(fract_mixing)
-        idx_tree = b_parent1 + 1
-        self.tree_latents.insert(idx_tree, list_latents)
-        self.tree_final_imgs.insert(idx_tree, self.dh.latent2image(list_latents[-1]))
-        self.tree_fracts.insert(idx_tree, fract_mixing)
-        self.tree_idx_injection.insert(idx_tree, idx_injection)
+        left_sim = self.get_lpips_similarity(img_insert, self.tree_final_imgs[b_parent1])
+        right_sim = self.get_lpips_similarity(img_insert, self.tree_final_imgs[b_parent2])
+        idx_insert = b_parent1 + 1
+        self.tree_latents.insert(idx_insert, list_latents)
+        self.tree_final_imgs.insert(idx_insert, img_insert)
+        self.tree_fracts.insert(idx_insert, fract_mixing)
+        self.tree_idx_injection.insert(idx_insert, idx_injection)
+        
+        # update similarities
+        self.tree_similarities[b_parent1] = left_sim
+        self.tree_similarities.insert(idx_insert, right_sim)
+        
 
     def get_noise(self, seed):
         r"""
@@ -821,15 +832,14 @@ if __name__ == "__main__":
     
     pipe = DiffusionPipeline.from_pretrained(pretrained_model_name_or_path, torch_dtype=torch.float16, variant="fp16")
     pipe.to("cuda")
-    # pipe.vae = AutoencoderTiny.from_pretrained('madebyollin/taesdxl', torch_device='cuda', torch_dtype=torch.float16)
-    # pipe.vae = pipe.vae.cuda()
+    pipe.vae = AutoencoderTiny.from_pretrained('madebyollin/taesdxl', torch_device='cuda', torch_dtype=torch.float16)
+    pipe.vae = pipe.vae.cuda()
 
     dh = DiffusersHolder(pipe)
     # %% Next let's set up all parameters
     prompt1 = "photo of underwater landscape, fish, und the sea, incredible detail, high resolution"
     prompt2 = "rendering of an alien planet, strange plants, strange creatures, surreal"
     negative_prompt = "blurry, ugly, pale"  # Optional
-
 
     duration_transition = 12  # In seconds
 
@@ -840,7 +850,9 @@ if __name__ == "__main__":
     lb.set_negative_prompt(negative_prompt)
 
     # Run latent blending
+    t0 = time.time()
     lb.run_transition(fixed_seeds=[420, 421])
+    dt = time.time() - t0
 
     # Save movie
     fp_movie = f'test.mp4'
