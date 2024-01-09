@@ -27,29 +27,29 @@ list_prompts.append("photo of a house, high detail")
 # You can optionally specify the seeds
 list_seeds = [95437579, 33259350, 956051013]
 fp_movie = 'movie_example2.mp4'
-lb = BlendingEngine(dh)
+be = BlendingEngine(dh)
 
 list_movie_parts = []
 for i in range(len(list_prompts) - 1):
     # For a multi transition we can save some computation time and recycle the latents
     if i == 0:
-        lb.set_prompt1(list_prompts[i])
-        lb.set_prompt2(list_prompts[i + 1])
+        be.set_prompt1(list_prompts[i])
+        be.set_prompt2(list_prompts[i + 1])
         recycle_img1 = False
     else:
-        lb.swap_forward()
-        lb.set_prompt2(list_prompts[i + 1])
+        be.swap_forward()
+        be.set_prompt2(list_prompts[i + 1])
         recycle_img1 = True
 
     fp_movie_part = f"tmp_part_{str(i).zfill(3)}.mp4"
     fixed_seeds = list_seeds[i:i + 2]
     # Run latent blending
-    lb.run_transition(
+    be.run_transition(
         recycle_img1=recycle_img1,
         fixed_seeds=fixed_seeds)
 
     # Save movie
-    lb.write_movie_transition(fp_movie_part, duration_single_trans)
+    be.write_movie_transition(fp_movie_part, duration_single_trans)
     list_movie_parts.append(fp_movie_part)
 
 # Finally, concatente the result
