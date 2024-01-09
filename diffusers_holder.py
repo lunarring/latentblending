@@ -49,7 +49,6 @@ class DiffusersHolder():
         self.width_img = self.width_latent  * self.pipe.vae_scale_factor
         self.height_img = self.height_latent  * self.pipe.vae_scale_factor
         
-        self.is_sdxl_turbo = False
 
     def init_types(self):
         assert hasattr(self.pipe, "__class__"), "No valid diffusers pipeline found."
