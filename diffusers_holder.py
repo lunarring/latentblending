@@ -107,7 +107,7 @@ class DiffusersHolder():
             pooled_prompt_embeds=None,
             negative_pooled_prompt_embeds=None,
             lora_scale=None,
-            clip_skip=self.pipe.clip_skip,
+            clip_skip=self.pipe._clip_skip,
         )
         return text_embeddings
 
