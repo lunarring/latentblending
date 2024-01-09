@@ -2,7 +2,6 @@
 
 Latent blending enables video transitions with incredible smoothness between prompts, computed within seconds. Powered by [stable diffusion XL](https://stability.ai/stable-diffusion), this method involves specific mixing of intermediate latent representations to create a seamless transition – with users having the option to fully customize the transition directly in high-resolution. The new version also supports SDXL Turbo, allowing to generate transitions faster than they are typically played back!
 
-
 ```python
 pipe = AutoPipelineForText2Image.from_pretrained("stabilityai/sdxl-turbo", torch_dtype=torch.float16, variant="fp16").to("cuda")
 dh = DiffusersHolder(pipe)
@@ -18,6 +17,13 @@ lb.run_transition()
 lb.write_movie_transition('movie_example1.mp4', duration_transition=12)
 
 ```
+
+# Installation
+```commandline
+pip install git+https://github.com/lunarring/latentblending
+```
+
+
 ## Gradio UI
 Coming soon again :)
 
@@ -89,12 +95,6 @@ crossfeed_decay = 0.2 # The power of the crossfeed decreases over diffusion iter
 lb.set_parental_crossfeed(crossfeed_power, crossfeed_range, crossfeed_decay)
 ```
 
-
-# Installation
-#### Packages
-```commandline
-pip install -r requirements.txt
-```
 
 # How does latent blending work?
 ## Method
