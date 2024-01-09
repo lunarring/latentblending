@@ -1,22 +1,22 @@
 # Quickstart
 
-Latent blending enables video transitions with incredible smoothness between prompts, computed within seconds. Powered by [stable diffusion XL](https://stability.ai/stable-diffusion), this method involves specific mixing of intermediate latent representations to create a seamless transition – with users having the option to fully customize the transition directly in high-resolution.
+Latent blending enables video transitions with incredible smoothness between prompts, computed within seconds. Powered by [stable diffusion XL](https://stability.ai/stable-diffusion), this method involves specific mixing of intermediate latent representations to create a seamless transition – with users having the option to fully customize the transition directly in high-resolution. The new version also supports SDXL Turbo, allowing to generate transitions faster than they are typically played back!
 
 
 ```python
-pretrained_model_name_or_path = "stabilityai/stable-diffusion-xl-base-1.0"
-pipe = DiffusionPipeline.from_pretrained(pretrained_model_name_or_path, torch_dtype=torch.float16).to('cuda')
+pipe = AutoPipelineForText2Image.from_pretrained("stabilityai/sdxl-turbo", torch_dtype=torch.float16, variant="fp16").to("cuda")
 dh = DiffusersHolder(pipe)
 lb = LatentBlending(dh)
+lb.set_prompt1("photo of underwater landscape, fish, und the sea, incredible detail, high resolution")
+lb.set_prompt2("rendering of an alien planet, strange plants, strange creatures, surreal")
+lb.set_negative_prompt("blurry, ugly, pale")
 
-lb.set_prompt1('photo of my first prompt1')
-lb.set_prompt2('photo of my second prompt')
-depth_strength = 0.6 # How deep the first branching happens
-t_compute_max_allowed = 10 # How much compute time we give to the transition
-imgs_transition = lb.run_transition(
-    depth_strength=depth_strength,
-    num_inference_steps=num_inference_steps,
-    t_compute_max_allowed=t_compute_max_allowed)
+# Run latent blending
+lb.run_transition()
+
+# Save movie
+lb.write_movie_transition('movie_example1.mp4', duration_transition=12)
+
 ```
 ## Gradio UI
 Coming soon again :)
@@ -32,24 +32,42 @@ To run multiple transition between K prompts, resulting in a stitched video, run
 
 # Customization
 
-## Most relevant parameters
-You can find the [most relevant parameters here.](parameters.md)
-
 ### Change the height/width
 ```python 
 size_output = (1024, 768)
 lb.set_dimensions(size_output)
 ```
+
+### Change the number of diffusion steps (set_num_inference_steps)
+```python
+lb.set_num_inference_steps(50)
+```
+For SDXL this is set as default=30, for SDXL Turbo a value of 4 is taken.
+
+
+### Change the guidance scale
+```python
+lb.set_guidance_scale(3.0)
+```
+For SDXL this is set as default=4.0, for SDXL Turbo a value of 0 is taken.
+
+### Change the branching paramters
+```python
+depth_strength = 0.5
+nmb_max_branches = 15
+lb.set_branching(depth_strength=depth_strength, t_compute_max_allowed=None, nmb_max_branches=None)
+```
+* depth_strength: The strength of the diffusion iterations determines when the blending process will begin. A value close to zero results in more creative and intricate outcomes, while a value closer to one indicates a simpler alpha blending. However, low values may also bring about the introduction of additional objects and motion.
+* t_compute_max_allowed:  maximum time allowed for computation. Higher values give better results but take longer. Either provide t_compute_max_allowed or nmb_max_branches. Does not work for SDXL Turbo.
+* nmb_max_branches: The maximum number of branches to be computed. Higher values give better results. Use this if you want to have controllable results independent of your hardware. Either provide t_compute_max_allowed or nmb_max_branches. 
+
+## Most relevant parameters
+You can find the [most relevant parameters here.](parameters.md)
+
 ### Change guidance scale
 ```python 
 lb.set_guidance_scale(5.0)
 ```
-
-### run_transition parameters
-* num_inference_steps: number of diffusions steps.Number of diffusion steps. Higher values will take more compute time.
-* depth_strength: The strength of the diffusion iterations determines when the blending process will begin. A value close to zero results in more creative and intricate outcomes, while a value closer to one indicates a simpler alpha blending. However, low values may also bring about the introduction of additional objects and motion.
-* t_compute_max_allowed:  maximum time allowed for computation. Higher values give better results but take longer. Either provide t_compute_max_allowed or nmb_max_branches. 
-* nmb_max_branches: The maximum number of branches to be computed. Higher values give better results. Use this if you want to have controllable results independent of your hardware. Either provide t_compute_max_allowed or nmb_max_branches. 
 
 ### Crossfeeding to the last image.
 Cross-feeding latents is a key feature of latent blending. Here, you can set how much the first image branch influences the very last one. In the animation below, these are the blue arrows.
@@ -95,7 +113,8 @@ imgs_transition = lb.run_transition(num_inference_steps=10, depth_strength=0.2, 
 With latent blending, we can create transitions that appear to defy the laws of nature, yet appear completely natural and believable. The key is to surpress processing in our [dorsal visual stream](https://en.wikipedia.org/wiki/Two-streams_hypothesis#Dorsal_stream), which is achieved by avoiding motion in the transition. Without motion, our visual system has difficulties detecting the transition, leaving viewers with the illusion of a single, continuous image, see [change blindness](https://en.wikipedia.org/wiki/Change_blindness). However, when motion is introduced, the visual system can detect the transition and the viewer becomes aware of the transition, leading to a jarring effect. Therefore, best results will be achieved when optimizing the transition parameters, particularly the crossfeeding parameters and the depth of the first injection.
 
 # Changelog
-* SD XL support 
+* SDXL Turbo support 
+* SDXL support 
 * Diffusers backend, greatly simplifing installation and use (bring your own pipe)
 * New blending engine with cross-feeding capabilities, enabling structure preserving transitions
 * LPIPS image similarity for finding the next best injection branch, resulting in smoother transitions
@@ -109,7 +128,6 @@ With latent blending, we can create transitions that appear to defy the laws of 
 - [ ] Huggingface Space
 - [ ] Controlnet
 - [ ] IP-Adapter
-- [ ] Latent Consistency
 
 
 
