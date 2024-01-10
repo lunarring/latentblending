@@ -19,7 +19,6 @@ be.run_transition()
 
 # Save movie
 be.write_movie_transition('movie_example1.mp4', duration_transition=12)
-
 ```
 
 # Installation
@@ -27,6 +26,13 @@ be.write_movie_transition('movie_example1.mp4', duration_transition=12)
 pip install git+https://github.com/lunarring/latentblending
 ```
 
+# Extra speedup with stable_fast compile
+Install https://github.com/chengzeyi/stable-fast
+
+Then enable pipe compilation by setting *do_compile=True*
+```python
+be = BlendingEngine(dh, do_compile=True)
+```
 
 ## Gradio UI
 Coming soon again :)
