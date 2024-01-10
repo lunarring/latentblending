@@ -1,8 +1,8 @@
 import torch
 import warnings
-from blending_engine import BlendingEngine
-from diffusers_holder import DiffusersHolder
 from diffusers import AutoPipelineForText2Image
+from latentblending.blending_engine import BlendingEngine
+from latentblending.diffusers_holder import DiffusersHolder
 
 warnings.filterwarnings('ignore')
 torch.set_grad_enabled(False)

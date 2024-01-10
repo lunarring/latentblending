@@ -23,10 +23,10 @@ Coming soon again :)
 
 ## Example 1: Simple transition
 ![](example1.jpg)
-To run a simple transition between two prompts, run `example1_standard.py`
+To run a simple transition between two prompts, see `examples/single_trans.py`
 
 ## Example 2: Multi transition
-To run multiple transition between K prompts, resulting in a stitched video, run `example2_multitrans.py`.
+To run multiple transition between K prompts, resulting in a stitched video, see `examples/multi_trans.py`.
 [View a longer example video here.](https://vimeo.com/789052336/80dcb545b2)
 
 
@@ -124,6 +124,7 @@ With latent blending, we can create transitions that appear to defy the laws of 
 * Inpaint support dropped (as it only makes sense for a single transition)
 
 # Coming soon...
+- [ ] MacOS support
 - [ ] Gradio interface
 - [ ] Huggingface Space
 - [ ] Controlnet

@@ -1,9 +1,9 @@
 import torch
 import warnings
-from blending_engine import BlendingEngine
-from diffusers_holder import DiffusersHolder
 from diffusers import AutoPipelineForText2Image
-from movie_util import concatenate_movies
+from latentblending.movie_util import concatenate_movies
+from latentblending.blending_engine import BlendingEngine
+from latentblending.diffusers_holder import DiffusersHolder
 torch.set_grad_enabled(False)
 torch.backends.cudnn.benchmark = False
 warnings.filterwarnings('ignore')
