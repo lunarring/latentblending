@@ -51,19 +51,19 @@ To run multiple transition between K prompts, resulting in a stitched video, see
 ### Change the height/width
 ```python 
 size_output = (1024, 768)
-lb.set_dimensions(size_output)
+be.set_dimensions(size_output)
 ```
 
 ### Change the number of diffusion steps (set_num_inference_steps)
 ```python
-lb.set_num_inference_steps(50)
+be.set_num_inference_steps(50)
 ```
 For SDXL this is set as default=30, for SDXL Turbo a value of 4 is taken.
 
 
 ### Change the guidance scale
 ```python
-lb.set_guidance_scale(3.0)
+be.set_guidance_scale(3.0)
 ```
 For SDXL this is set as default=4.0, for SDXL Turbo a value of 0 is taken.
 
@@ -71,7 +71,7 @@ For SDXL this is set as default=4.0, for SDXL Turbo a value of 0 is taken.
 ```python
 depth_strength = 0.5
 nmb_max_branches = 15
-lb.set_branching(depth_strength=depth_strength, t_compute_max_allowed=None, nmb_max_branches=None)
+be.set_branching(depth_strength=depth_strength, t_compute_max_allowed=None, nmb_max_branches=None)
 ```
 * depth_strength: The strength of the diffusion iterations determines when the blending process will begin. A value close to zero results in more creative and intricate outcomes, while a value closer to one indicates a simpler alpha blending. However, low values may also bring about the introduction of additional objects and motion.
 * t_compute_max_allowed:  maximum time allowed for computation. Higher values give better results but take longer. Either provide t_compute_max_allowed or nmb_max_branches. Does not work for SDXL Turbo.
@@ -82,7 +82,7 @@ You can find the [most relevant parameters here.](parameters.md)
 
 ### Change guidance scale
 ```python 
-lb.set_guidance_scale(5.0)
+be.set_guidance_scale(5.0)
 ```
 
 ### Crossfeeding to the last image.
@@ -92,7 +92,7 @@ Cross-feeding latents is a key feature of latent blending. Here, you can set how
 crossfeed_power = 0.5 # 50% of the latents in the last branch are copied from branch1
 crossfeed_range = 0.7 # The crossfeed is active until 70% of num_iteration, then switched off
 crossfeed_decay = 0.2 # The power of the crossfeed decreases over diffusion iterations, here it would be 0.5*0.2=0.1 in the end of the range.
-lb.set_branch1_crossfeed(crossfeed_power, crossfeed_range, crossfeed_decay)
+be.set_branch1_crossfeed(crossfeed_power, crossfeed_range, crossfeed_decay)
 ```
 
 ### Crossfeeding to all transition images
@@ -102,7 +102,7 @@ Here, you can set how much the parent branches influence the mixed one. In the a
 crossfeed_power = 0.5 # 50% of the latents in the last branch are copied from the parents
 crossfeed_range = 0.7 # The crossfeed is active until 70% of num_iteration, then switched off
 crossfeed_decay = 0.2 # The power of the crossfeed decreases over diffusion iterations, here it would be 0.5*0.2=0.1 in the end of the range.
-lb.set_parental_crossfeed(crossfeed_power, crossfeed_range, crossfeed_decay)
+be.set_parental_crossfeed(crossfeed_power, crossfeed_range, crossfeed_decay)
 ```
 
 
@@ -114,9 +114,9 @@ In the figure above, a diffusion tree is illustrated. The diffusion steps are re
 
 The concrete parameters for the transition above would be:
 ```
-lb.set_branch1_crossfeed(crossfeed_power=0.8, crossfeed_range=0.6, crossfeed_decay=0.4)
-lb.set_parental_crossfeed(crossfeed_power=0.8, crossfeed_range=0.8, crossfeed_decay=0.2)
-imgs_transition = lb.run_transition(num_inference_steps=10, depth_strength=0.2, nmb_max_branches=7)
+be.set_branch1_crossfeed(crossfeed_power=0.8, crossfeed_range=0.6, crossfeed_decay=0.4)
+be.set_parental_crossfeed(crossfeed_power=0.8, crossfeed_range=0.8, crossfeed_decay=0.2)
+imgs_transition = be.run_transition(num_inference_steps=10, depth_strength=0.2, nmb_max_branches=7)
 ```
 
 ## Perceptual aspects
