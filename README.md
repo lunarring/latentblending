@@ -42,7 +42,7 @@ To run a simple transition between two prompts, see `examples/single_trans.py`
 
 ## Example 2: Multi transition
 To run multiple transition between K prompts, resulting in a stitched video, see `examples/multi_trans.py`.
-[View a longer example video here.](https://vimeo.com/789052336/80dcb545b2)
+[View a longer example video here.](https://youtu.be/RLF-yW5dR_Q) 
 
 
 # Customization
