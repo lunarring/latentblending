@@ -3,7 +3,6 @@ import warnings
 from diffusers import AutoPipelineForText2Image
 from latentblending.movie_util import concatenate_movies
 from latentblending.blending_engine import BlendingEngine
-from latentblending.diffusers_holder import DiffusersHolder
 torch.set_grad_enabled(False)
 torch.backends.cudnn.benchmark = False
 warnings.filterwarnings('ignore')
@@ -11,7 +10,7 @@ warnings.filterwarnings('ignore')
 # %% First let us spawn a stable diffusion holder. Uncomment your version of choice.
 pipe = AutoPipelineForText2Image.from_pretrained("stabilityai/sdxl-turbo", torch_dtype=torch.float16, variant="fp16")
 pipe.to('cuda')
-dh = DiffusersHolder(pipe)
+be = BlendingEngine(pipe)
 
 # %% Let's setup the multi transition
 fps = 30
@@ -24,10 +23,10 @@ list_prompts.append("Photo of an elephant in african savannah")
 list_prompts.append("photo of a house, high detail")
 
 
-# You can optionally specify the seeds
-list_seeds = [95437579, 33259350, 956051013]
+# Specify the seeds
+list_seeds = np.random.randint(0, 10^9, len(list_prompts))
 fp_movie = 'movie_example2.mp4'
-be = BlendingEngine(dh)
+
 
 list_movie_parts = []
 for i in range(len(list_prompts) - 1):

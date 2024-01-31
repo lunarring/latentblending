@@ -9,7 +9,8 @@ from latentblending.movie_util import MovieSaver
 from typing import List, Optional
 import lpips
 import platform
-from latentblending.utils import interpolate_spherical, interpolate_linear, add_frames_linear_interp, yml_load, yml_save
+from latentblending.diffusers_holder import DiffusersHolder
+from latentblending.utils import interpolate_spherical, interpolate_linear, add_frames_linear_interp
 warnings.filterwarnings('ignore')
 torch.backends.cudnn.benchmark = False
 torch.set_grad_enabled(False)
@@ -18,13 +19,15 @@ torch.set_grad_enabled(False)
 class BlendingEngine():
     def __init__(
             self,
-            dh: None,
+            pipe: None,
             do_compile: bool = False,
             guidance_scale_mid_damper: float = 0.5,
             mid_compression_scaler: float = 1.2):
         r"""
         Initializes the latent blending class.
         Args:
+            pipe: diffusers pipeline (SDXL)
+            do_compile: compile pipeline for faster inference using stable fast
             guidance_scale_mid_damper: float = 0.5
                 Reduces the guidance scale towards the middle of the transition.
                 A value of 0.5 would decrease the guidance_scale towards the middle linearly by 0.5.
@@ -37,7 +40,8 @@ class BlendingEngine():
             and guidance_scale_mid_damper <= 1.0, \
             f"guidance_scale_mid_damper neees to be in interval (0,1], you provided {guidance_scale_mid_damper}"
 
-        self.dh = dh
+    
+        self.dh = DiffusersHolder(pipe)
         self.device = self.dh.device
         self.set_dimensions()
 
@@ -97,7 +101,7 @@ class BlendingEngine():
         """
         Measures the time per diffusion step and for the vae decoding
         """
-        
+        print("starting speed benchmark...")
         text_embeddings = self.dh.get_text_embedding("test")
         latents_start = self.dh.get_noise(np.random.randint(111111))
         # warmup
@@ -111,6 +115,7 @@ class BlendingEngine():
         t0 = time.time()
         img = self.dh.latent2image(list_latents[-1])
         self.dt_vae = time.time() - t0
+        print(f"time per unet iteration: {self.dt_unet_step} time for vae: {self.dt_vae}")
 
     def set_dimensions(self, size_output=None):
         r"""
@@ -701,12 +706,6 @@ class BlendingEngine():
             ms.write_frame(img)
         ms.finalize()
 
-    def save_statedict(self, fp_yml):
-        # Dump everything relevant into yaml
-        imgs_transition = self.tree_final_imgs
-        state_dict = self.get_state_dict()
-        state_dict['nmb_images'] = len(imgs_transition)
-        yml_save(fp_yml, state_dict)
 
     def get_state_dict(self):
         state_dict = {}
@@ -828,14 +827,18 @@ if __name__ == "__main__":
     from diffusers import AutoencoderTiny
     # pretrained_model_name_or_path = "stabilityai/stable-diffusion-xl-base-1.0"
     pretrained_model_name_or_path = "stabilityai/sdxl-turbo"
+    pipe = DiffusionPipeline.from_pretrained(pretrained_model_name_or_path)
     
     
-    pipe = DiffusionPipeline.from_pretrained(pretrained_model_name_or_path, torch_dtype=torch.float16, variant="fp16")
+    # pipe.to("mps")
     pipe.to("cuda")
-    pipe.vae = AutoencoderTiny.from_pretrained('madebyollin/taesdxl', torch_device='cuda', torch_dtype=torch.float16)
-    pipe.vae = pipe.vae.cuda()
+    
+    # pipe.vae = AutoencoderTiny.from_pretrained('madebyollin/taesdxl', torch_device='cuda', torch_dtype=torch.float16)
+    # pipe.vae = pipe.vae.cuda()
 
     dh = DiffusersHolder(pipe)
+    
+    xxx
     # %% Next let's set up all parameters
     prompt1 = "photo of underwater landscape, fish, und the sea, incredible detail, high resolution"
     prompt2 = "rendering of an alien planet, strange plants, strange creatures, surreal"

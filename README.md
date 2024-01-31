@@ -8,8 +8,7 @@ from latentblending.blending_engine import BlendingEngine
 from latentblending.diffusers_holder import DiffusersHolder
 
 pipe = AutoPipelineForText2Image.from_pretrained("stabilityai/sdxl-turbo", torch_dtype=torch.float16, variant="fp16").to("cuda")
-dh = DiffusersHolder(pipe)
-be = BlendingEngine(dh)
+be = BlendingEngine(pipe)
 be.set_prompt1("photo of underwater landscape, fish, und the sea, incredible detail, high resolution")
 be.set_prompt2("rendering of an alien planet, strange plants, strange creatures, surreal")
 be.set_negative_prompt("blurry, ugly, pale")
@@ -31,7 +30,7 @@ Install https://github.com/chengzeyi/stable-fast
 
 Then enable pipe compilation by setting *do_compile=True*
 ```python
-be = BlendingEngine(dh, do_compile=True)
+be = BlendingEngine(pipe, do_compile=True)
 ```
 
 ## Gradio UI
