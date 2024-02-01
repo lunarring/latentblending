@@ -3,6 +3,7 @@ import warnings
 from diffusers import AutoPipelineForText2Image
 from latentblending.movie_util import concatenate_movies
 from latentblending.blending_engine import BlendingEngine
+import numpy as np
 torch.set_grad_enabled(False)
 torch.backends.cudnn.benchmark = False
 warnings.filterwarnings('ignore')
