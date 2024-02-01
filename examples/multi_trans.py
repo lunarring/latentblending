@@ -9,7 +9,10 @@ torch.backends.cudnn.benchmark = False
 warnings.filterwarnings('ignore')
 
 # %% First let us spawn a stable diffusion holder. Uncomment your version of choice.
-pipe = AutoPipelineForText2Image.from_pretrained("stabilityai/sdxl-turbo", torch_dtype=torch.float16, variant="fp16")
+pretrained_model_name_or_path = "stabilityai/stable-diffusion-xl-base-1.0"
+# pretrained_model_name_or_path = "stabilityai/sdxl-turbo"
+
+pipe = AutoPipelineForText2Image.from_pretrained(pretrained_model_name_or_path, torch_dtype=torch.float16, variant="fp16")
 pipe.to('cuda')
 be = BlendingEngine(pipe)
 
