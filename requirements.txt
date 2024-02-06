@@ -4,3 +4,4 @@ ffmpeg-python
 diffusers==0.25.0
 transformers
 pytest
+accelerate

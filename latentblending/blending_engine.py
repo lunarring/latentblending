@@ -11,6 +11,7 @@ import lpips
 import platform
 from latentblending.diffusers_holder import DiffusersHolder
 from latentblending.utils import interpolate_spherical, interpolate_linear, add_frames_linear_interp
+from lunar_tools import MovieSaver, fill_up_frames_linear_interpolation
 warnings.filterwarnings('ignore')
 torch.backends.cudnn.benchmark = False
 torch.set_grad_enabled(False)
@@ -696,7 +697,7 @@ class BlendingEngine():
         """
 
         # Let's get more cheap frames via linear interpolation (duration_transition*fps frames)
-        imgs_transition_ext = add_frames_linear_interp(self.tree_final_imgs, duration_transition, fps)
+        imgs_transition_ext = fill_up_frames_linear_interpolation(self.tree_final_imgs, duration_transition, fps)
 
         # Save as MP4
         if os.path.isfile(fp_movie):

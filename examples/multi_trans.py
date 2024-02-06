@@ -31,47 +31,12 @@ nmb_prompts = 20
 
 list_prompts = []
 list_prompts.append("high resolution ultra 8K image with lake and forest")
-# list_prompts.append("strange and alien desolate lanscapes 8K")
-# list_prompts.append("ultra high res psychedelic skyscraper city landscape 8K unreal engine")
-list_prompts = list_prompts*10
-
-be.set_prompt1(list_prompts[0])
-be.compute_latents1(True)
-
-#img = pipe(list_prompts[0]).images[0]
-
-
-#%%
-# import os
-# import random
-
-# # Directory containing the text files
-# dir_prompts = "/raid/data/diffusion/flamengalo/prompts_surreal"
-
-# # List to store the contents of selected text files
-# list_prompts = []
-
-# # List all files in the directory
-# file_list = os.listdir(dir_prompts)
-
-# # Shuffle the file list to get random files
-# random.shuffle(file_list)
-
-# # Loop through the first nmb_prompts files and read their contents
-# for filename in file_list[:nmb_prompts]:
-#     file_path = os.path.join(dir_prompts, filename)
-#     try:
-#         with open(file_path, 'r') as file:
-#             content = file.read()
-#             list_prompts.append(content)
-#     except Exception as e:
-#         print(f"except {e}")
+list_prompts.append("strange and alien desolate lanscapes 8K")
+list_prompts.append("ultra high res psychedelic skyscraper city landscape 8K unreal engine")
 #%%
 fp_movie = f'surreal_nmb{len(list_prompts)}.mp4'
 # Specify the seeds
-list_seeds = np.random.randint(0, 1111111111111, len(list_prompts))
-
-
+list_seeds = np.random.randint(0, np.iinfo(np.int32).max, len(list_prompts))
 
 list_movie_parts = []
 for i in range(len(list_prompts) - 1):
