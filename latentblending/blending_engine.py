@@ -5,7 +5,6 @@ import warnings
 import time
 from tqdm.auto import tqdm
 from PIL import Image
-from latentblending.movie_util import MovieSaver
 from typing import List, Optional
 import lpips
 import platform
