@@ -289,7 +289,7 @@ class BlendingEngine():
             if t_compute_max_allowed is None and nmb_max_branches is None:
                 t_compute_max_allowed = 20
             elif t_compute_max_allowed is not None and nmb_max_branches is not None:
-                raise ValueErorr("Either specify t_compute_max_allowed or nmb_max_branches")
+                raise ValueError("Either specify t_compute_max_allowed or nmb_max_branches")
             
             self.list_idx_injection, self.list_nmb_stems = self.get_time_based_branching(depth_strength, t_compute_max_allowed, nmb_max_branches)    
 
