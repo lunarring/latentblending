@@ -680,7 +680,6 @@ class BlendingEngine():
             img_leaf = Image.fromarray(img)
             img_leaf.save(os.path.join(dp_img, f"lowres_img_{str(i).zfill(4)}.jpg"))
         fp_yml = os.path.join(dp_img, "lowres.yaml")
-        self.save_statedict(fp_yml)
 
     def write_movie_transition(self, fp_movie, duration_transition, fps=30):
         r"""
@@ -728,35 +727,6 @@ class BlendingEngine():
                         pass
         return state_dict
 
-    def randomize_seed(self):
-        r"""
-        Set a random seed for a fresh start.
-        """
-        seed = np.random.randint(999999999)
-        self.set_seed(seed)
-
-    def set_seed(self, seed: int):
-        r"""
-        Set a the seed for a fresh start.
-        """
-        self.seed = seed
-        self.dh.seed = seed
-
-    def set_width(self, width):
-        r"""
-        Set the width of the resulting image.
-        """
-        assert np.mod(width, 64) == 0, "set_width: value needs to be divisible by 64"
-        self.width = width
-        self.dh.width = width
-
-    def set_height(self, height):
-        r"""
-        Set the height of the resulting image.
-        """
-        assert np.mod(height, 64) == 0, "set_height: value needs to be divisible by 64"
-        self.height = height
-        self.dh.height = height
 
     def swap_forward(self):
         r"""
