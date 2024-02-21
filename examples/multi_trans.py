@@ -1,7 +1,7 @@
 import torch
 import warnings
 from diffusers import AutoPipelineForText2Image
-from latentblending.movie_util import concatenate_movies
+from lunar_tools import concatenate_movies
 from latentblending.blending_engine import BlendingEngine
 import numpy as np
 torch.set_grad_enabled(False)
@@ -21,9 +21,6 @@ fps = 30
 duration_single_trans = 10
 be.set_dimensions((1024, 1024))
 nmb_prompts = 20
-
-
-
 
 
 # Specify a list of prompts below
