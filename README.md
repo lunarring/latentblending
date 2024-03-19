@@ -35,11 +35,12 @@ be = BlendingEngine(pipe, do_compile=True)
 ```
 
 ## Gradio UI
-Coming soon again :)
+We made a UI, in  latentblending/gradio_ui.py
+The idea is to generate the keyframes iteratively, selecting the best prompt and seed, and saving the result as .json. Next the video production can be run as a second step using example_multi_trans_json.py
 
 ## Example 1: Simple transition
 ![](example1.jpg)
-To run a simple transition between two prompts, see `examples/single_trans.py`
+To run a simple transition between two prompts, see `examples/single_trans.py`, or [check this volcano eruption ](https://youtu.be/O_2fpWHdnm4).
 
 ## Example 2: Multi transition
 To run multiple transition between K prompts, resulting in a stitched video, see `examples/multi_trans.py`.
