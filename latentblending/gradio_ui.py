@@ -17,6 +17,14 @@ import tempfile
 import json
 from lunar_tools import concatenate_movies
 
+"""
+TODO
+- time per segment
+- init phase (model, res, nmb iter)
+- recycle existing movies
+- hf spaces integration
+"""
+
 
 class BlendingFrontend():
     def __init__(
