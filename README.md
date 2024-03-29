@@ -35,8 +35,12 @@ be = BlendingEngine(pipe, do_compile=True)
 ```
 
 ## Gradio UI
-We made a UI, in  latentblending/gradio_ui.py
-The idea is to generate the keyframes iteratively, selecting the best prompt and seed, and saving the result as .json. Next the video production can be run as a second step using example_multi_trans_json.py
+We can launch the a user-interface version with:
+```commandline
+python latentblending/gradio_ui.py
+```
+
+With the UI, you can iteratively generate your desired keyframes, and then render the movie with latent blending it at the end.
 
 ## Example 1: Simple transition
 ![](example1.jpg)
@@ -136,7 +140,6 @@ With latent blending, we can create transitions that appear to defy the laws of 
 
 # Coming soon...
 - [ ] MacOS support
-- [ ] Gradio interface
 - [ ] Huggingface Space
 - [ ] Controlnet
 - [ ] IP-Adapter
